@@ -36,4 +36,4 @@ Initial public release.
 - Reports redacted before storage and download
 - No permit join, remove, reset, bind, unbind, OTA, or channel changes
 
-[0.1.0]: https://github.com/zigbeelens/zigbeelens/releases/tag/v0.1.0
+[0.1.0]: https://github.com/theaussiepom/zigbeelens/releases/tag/v0.1.0

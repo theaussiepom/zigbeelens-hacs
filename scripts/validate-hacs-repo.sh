@@ -19,8 +19,10 @@ import json, sys
 from pathlib import Path
 
 hacs = json.loads(Path("${ROOT}/hacs.json").read_text())
-if hacs.get("content_in_root") is not True:
-    sys.exit("hacs.json content_in_root must be true")
+if hacs.get("content_in_root") is not False:
+    sys.exit("hacs.json content_in_root must be false for custom_components layout")
+if hacs.get("filename") != "zigbeelens":
+    sys.exit("hacs.json filename must be zigbeelens")
 manifest = json.loads(Path("${ROOT}/custom_components/zigbeelens/manifest.json").read_text())
 if manifest.get("domain") != "zigbeelens":
     sys.exit("manifest domain must be zigbeelens")
