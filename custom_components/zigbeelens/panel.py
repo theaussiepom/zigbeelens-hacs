@@ -4,8 +4,7 @@ Registers a custom Home Assistant sidebar panel (a status/launcher surface, not
 the full product UI) plus a websocket command that returns a redacted summary
 built entirely from HA-side coordinator data.
 
-The sidebar never iframes Core by default. Optional Try Embedded View in the
-panel JS is manual only; Open Full Dashboard always opens Core in a new tab.
+The sidebar never iframes Core by default. When HA and Core share the same scheme, the panel JS embeds the full Core UI automatically.
 """
 
 from __future__ import annotations

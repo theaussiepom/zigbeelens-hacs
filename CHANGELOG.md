@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-06-15
+
+### Changed
+
+- HA panel default: embed full Core dashboard when HA and Core use the same protocol (HTTP+HTTP or HTTPS+HTTPS)
+- Keep ☰ menu button and **Open in new tab** link on the embedded toolbar; mixed content still falls back to summary
+
 ## [0.1.10] - 2026-06-15
 
 ### Fixed

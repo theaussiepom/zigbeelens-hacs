@@ -1,11 +1,9 @@
 /**
- * ZigbeeLens companion panel (native Home Assistant custom panel).
+ * ZigbeeLens panel inside Home Assistant.
  *
- * Default view: redacted status summary over the HA websocket (no direct Core fetch).
- * No iframe on load — the sidebar is a native companion panel, not an embedded Core UI.
- *
- * Primary action: Open Full Dashboard (new tab — always reliable).
- * Secondary action: Try Embedded View (manual optional iframe).
+ * When HA and Core share the same scheme (HTTP+HTTP or HTTPS+HTTPS), loads the
+ * full Core dashboard in an iframe. Mixed content falls back to the native summary
+ * plus Open Full Dashboard. The menu button (☰) reopens HA's main sidebar.
  */
 
 const SEVERITY = {
@@ -83,6 +81,9 @@ class ZigbeeLensPanel extends HTMLElement {
 
   set panel(panel) {
     this._configCoreUrl = (panel && panel.config && panel.config.core_url) || "";
+    if (this._maybeAutoEmbed() && this.shadowRoot) {
+      this._render();
+    }
   }
 
   set narrow(n) {
@@ -120,11 +121,29 @@ class ZigbeeLensPanel extends HTMLElement {
     }
     this._loading = false;
     this._loaded = true;
+    this._maybeAutoEmbed();
     this._render();
   }
 
   _coreUrl() {
     return (this._summary && this._summary.core_url) || this._configCoreUrl || "";
+  }
+
+  _maybeAutoEmbed() {
+    const coreUrl = this._coreUrl();
+    const { canEmbed } = canEmbedDashboard(
+      window.location.protocol,
+      coreUrl,
+      window.location.href
+    );
+    if (!canEmbed || !coreUrl) {
+      if (this._view === "embedded") {
+        this._view = "embed_blocked";
+      }
+      return false;
+    }
+    this._view = "embedded";
+    return true;
   }
 
   _openDashboardButton(coreUrl, extraClass = "") {
@@ -151,8 +170,12 @@ class ZigbeeLensPanel extends HTMLElement {
     </button>`;
   }
 
-  _panelToolbar(extra = "") {
-    return `<div class="panel-toolbar">${this._haMenuButton()}${extra}</div>`;
+  _panelToolbar({ embedded = false } = {}) {
+    const openTab =
+      embedded && this._coreUrl()
+        ? `<a class="toolbar-link" href="${esc(this._coreUrl())}" target="_blank" rel="noopener noreferrer">Open in new tab</a>`
+        : "";
+    return `<div class="panel-toolbar${embedded ? " embed-toolbar" : ""}">${this._haMenuButton()}${openTab}</div>`;
   }
 
   _toggleHaSidebar() {
@@ -172,8 +195,8 @@ class ZigbeeLensPanel extends HTMLElement {
     if (this._view === "embedded") {
       this.shadowRoot.innerHTML = `
         <style>${ZigbeeLensPanel.styles}</style>
-        ${this._panelToolbar()}
-        <div class="wrap embed-wrap">
+        <div class="embed-layout">
+          ${this._panelToolbar({ embedded: true })}
           ${this._embeddedView(coreUrl)}
         </div>
       `;
@@ -208,9 +231,9 @@ class ZigbeeLensPanel extends HTMLElement {
         ${!this._loading && connected ? this._networksCard(s) : ""}
         ${!this._loading ? this._integrationCard(s, coreUrl, connected) : ""}
         <p class="note">
-          The native companion panel works for all installs without iframing Core.
-          Open Full Dashboard opens the full dashboard in a new tab. Try Embedded View
-          is optional and only loads when you choose it.
+          The full dashboard opens here automatically when Home Assistant and Core use
+          the same protocol. Use the menu button (☰) to reopen Home Assistant navigation.
+          Open Full Dashboard opens Core in a new tab.
         </p>
       </div>
     `;
@@ -219,20 +242,16 @@ class ZigbeeLensPanel extends HTMLElement {
   }
 
   _embeddedView(coreUrl) {
-    const iframe = coreUrl
-      ? `<iframe
-          class="embed-frame"
-          src="${esc(coreUrl)}"
-          title="ZigbeeLens full dashboard"
-          loading="lazy"
-          referrerpolicy="no-referrer"
-        ></iframe>`
-      : `<p class="muted">Core URL is not configured.</p>`;
-    return `
-      <section class="card embed-card">
-        ${iframe}
-      </section>
-    `;
+    if (!coreUrl) {
+      return `<p class="muted embed-empty">Core URL is not configured.</p>`;
+    }
+    return `<iframe
+      class="embed-frame"
+      src="${esc(coreUrl)}"
+      title="ZigbeeLens full dashboard"
+      loading="lazy"
+      referrerpolicy="no-referrer"
+    ></iframe>`;
   }
 
   _embedBlockedView(coreUrl) {
@@ -443,12 +462,21 @@ class ZigbeeLensPanel extends HTMLElement {
 
 ZigbeeLensPanel.styles = `
   :host {
-    display: block;
+    display: flex;
+    flex-direction: column;
     background: var(--primary-background-color, #f5f5f5);
     min-height: 100%;
+    height: 100%;
     color: var(--primary-text-color, #212121);
     font-family: var(--paper-font-body1_-_font-family, Roboto, system-ui, sans-serif);
-    overflow-x: clip;
+    overflow: hidden;
+  }
+  .embed-layout {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    height: 100%;
   }
   .wrap {
     max-width: 880px;
@@ -467,15 +495,33 @@ ZigbeeLensPanel.styles = `
     height: calc(100% - 8px);
     min-height: 480px;
   }
+  .embed-empty {
+    padding: 16px;
+  }
   .panel-toolbar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px 0;
+    gap: 12px;
+    padding: 8px 12px;
     max-width: 880px;
     margin: 0 auto;
     box-sizing: border-box;
+    flex-shrink: 0;
   }
+  .panel-toolbar.embed-toolbar {
+    max-width: none;
+    padding: 8px 12px;
+    background: var(--card-background-color, #fff);
+    border-bottom: 1px solid var(--divider-color, #e0e0e0);
+  }
+  .toolbar-link {
+    margin-left: auto;
+    color: var(--primary-color, #03a9f4);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .toolbar-link:hover { text-decoration: underline; }
   .menu-btn {
     display: inline-flex;
     align-items: center;
@@ -510,6 +556,13 @@ ZigbeeLensPanel.styles = `
     height: 100%;
     min-height: 0;
     padding: 12px;
+  }
+  .embed-frame {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    border: 0;
+    background: var(--card-background-color, #fff);
   }
   h1 { font-size: 1.4rem; margin: 0; line-height: 1.2; }
   h2 { font-size: 1.05rem; margin: 0 0 12px; }
@@ -617,14 +670,6 @@ ZigbeeLensPanel.styles = `
     font-size: 0.95rem;
     flex: 1 1 auto;
     width: auto;
-  }
-  .embed-frame {
-    width: 100%;
-    flex: 1;
-    min-height: 360px;
-    border: 1px solid var(--divider-color, #e0e0e0);
-    border-radius: 10px;
-    background: var(--card-background-color, #fff);
   }
   .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   .finding { margin: 0; line-height: 1.55; font-size: 1rem; word-break: break-word; }
