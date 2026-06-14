@@ -29,6 +29,7 @@ ISSUE_COLLECTOR_DISCONNECTED = "collector_disconnected"
 ISSUE_NO_NETWORKS = "no_networks_configured"
 ISSUE_NO_MQTT_DATA = "no_mqtt_data"
 ISSUE_MOCK_MODE = "mock_mode_active"
+ISSUE_PANEL_MIXED_CONTENT = "panel_mixed_content"
 ISSUE_INCOMPATIBLE_VERSION = "incompatible_core_version"
 
 MIN_CORE_VERSION = (0, 1, 0)

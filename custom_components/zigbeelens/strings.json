@@ -74,6 +74,10 @@
     "mock_mode_active": {
       "title": "Mock mode active",
       "description": "ZigbeeLens Core is running in mock mode rather than live MQTT collection."
+    },
+    "panel_mixed_content": {
+      "title": "Sidebar panel blocked by HTTPS/HTTP mismatch",
+      "description": "Home Assistant is served over HTTPS but Core is HTTP ({core_url}). Open the Core URL directly in a browser tab, serve Core over HTTPS, or access Home Assistant over HTTP on your LAN."
     }
   }
 }
