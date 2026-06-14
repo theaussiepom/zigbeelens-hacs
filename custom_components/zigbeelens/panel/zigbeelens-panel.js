@@ -148,19 +148,10 @@ class ZigbeeLensPanel extends HTMLElement {
     return `<div class="cta-row">${open}${embed}</div>`;
   }
 
-  _backButton() {
-    return `<button type="button" class="btn" id="back-summary">Back to Summary</button>`;
-  }
-
   _tryEmbeddedView() {
     const coreUrl = this._coreUrl();
     const { canEmbed } = canEmbedDashboard(window.location.protocol, coreUrl, window.location.href);
     this._view = canEmbed ? "embedded" : "embed_blocked";
-    this._render();
-  }
-
-  _backToSummary() {
-    this._view = "summary";
     this._render();
   }
 
@@ -225,10 +216,6 @@ class ZigbeeLensPanel extends HTMLElement {
       : `<p class="muted">Core URL is not configured.</p>`;
     return `
       <section class="card embed-card">
-        <div class="embed-toolbar">
-          ${this._backButton()}
-          ${this._openDashboardButton(coreUrl, "embed-open")}
-        </div>
         ${iframe}
       </section>
     `;
@@ -251,7 +238,6 @@ class ZigbeeLensPanel extends HTMLElement {
         </p>
         <div class="actions">
           ${this._openDashboardButton(coreUrl)}
-          ${this._backButton()}
         </div>
       </section>
     `;
@@ -414,9 +400,6 @@ class ZigbeeLensPanel extends HTMLElement {
   _wire() {
     const tryEmbed = this.shadowRoot.getElementById("try-embed");
     if (tryEmbed) tryEmbed.addEventListener("click", () => this._tryEmbeddedView());
-
-    const back = this.shadowRoot.getElementById("back-summary");
-    if (back) back.addEventListener("click", () => this._backToSummary());
 
     const reload = this.shadowRoot.getElementById("reload");
     if (reload) reload.addEventListener("click", () => this._loadSummary());

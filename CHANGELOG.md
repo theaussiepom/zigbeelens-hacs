@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-06-15
+
+### Fixed
+
+- HACS sidebar disappearing with HTTPS Core URL: force panel re-registration on setup so `embed_iframe=False` and `config.core_url` apply after upgrades (mirrors ThreadLens)
+- Panel state stored separately from entry runtime; unload order fixed so panel unregisters reliably
+
+### Changed
+
+- Embedded HTTPS view is full-screen (no “Back to Summary” toolbar)
+
 ## [0.1.7] - 2026-06-15
 
 ### Added

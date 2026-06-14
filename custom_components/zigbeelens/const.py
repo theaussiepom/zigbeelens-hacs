@@ -34,3 +34,7 @@ ISSUE_INCOMPATIBLE_VERSION = "incompatible_core_version"
 MIN_CORE_VERSION = (0, 1, 0)
 
 UPDATE_INTERVAL = timedelta(seconds=DEFAULT_SCAN_INTERVAL)
+
+# Companion panel registration state (separate from per-entry runtime dicts).
+DATA_FRONTEND_REGISTERED = "frontend_registered"
+PANEL_STATE_KEY = "_panel_state"
