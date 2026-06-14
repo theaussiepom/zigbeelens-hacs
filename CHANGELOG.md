@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-06-15
+
+### Added
+
+- HACS integration brand icons (`icon.png`, `logo.png`, `custom_components/zigbeelens/brand/`) for GitHub/HACS listing and Home Assistant integration settings (HA 2026.3+ brands proxy)
+- Config flow screenshot and docs for Core URL guidance (HTTP vs HTTPS, no `:8377` on HTTPS hostnames)
+- Beast Traefik example: `deploy/traefik/zigbeelens-router.yaml.example` — `/api` bypass without Authentik (mirrors ThreadLens) so HACS config flow works over HTTPS
+
+### Changed
+
+- HACS companion panel: **auto-embed** full Core dashboard when Home Assistant and Core use the same scheme (HTTP+HTTP or HTTPS+HTTPS); mixed content still shows calm blocked screen + Open Full Dashboard
+- HACS packaging copies root icons; validation asserts brand assets exist
+- Docs updated for Beast Traefik API bypass, correct Core URLs, and embedded-view setup
+
+## [0.1.6]
+
+Skipped — version bumped during icon work, released as 0.1.7.
+
+## [0.1.5] - 2026-06-14
+
 ### Changed
 
 - HACS companion panel: optional **Try Embedded View** secondary action with mixed-content safety checks; default remains native summary + Open Full Dashboard in new tab
