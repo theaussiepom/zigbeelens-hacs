@@ -2,11 +2,10 @@
  * ZigbeeLens companion panel (native Home Assistant custom panel).
  *
  * Default view: redacted status summary over the HA websocket (no direct Core fetch).
- * When browser security allows (matching HTTP/HTTPS scheme), opens the full Core UI
- * automatically instead of the native summary screen.
+ * No iframe on load — the sidebar is a native companion panel, not an embedded Core UI.
  *
  * Primary action: Open Full Dashboard (new tab — always reliable).
- * Secondary action: Try Embedded View (iframe — only when not mixed-content blocked).
+ * Secondary action: Try Embedded View (manual optional iframe).
  */
 
 const SEVERITY = {
@@ -112,17 +111,6 @@ class ZigbeeLensPanel extends HTMLElement {
     }
     this._loading = false;
     this._loaded = true;
-
-    const coreUrl = this._coreUrl();
-    const { canEmbed } = canEmbedDashboard(
-      window.location.protocol,
-      coreUrl,
-      window.location.href
-    );
-    if (canEmbed && coreUrl) {
-      this._view = "embedded";
-    }
-
     this._render();
   }
 
@@ -194,9 +182,9 @@ class ZigbeeLensPanel extends HTMLElement {
         ${!this._loading && connected ? this._networksCard(s) : ""}
         ${!this._loading ? this._integrationCard(s, coreUrl, connected) : ""}
         <p class="note">
-          The native panel works for all installs. Open Full Dashboard opens the full
-          dashboard in a new tab. Try Embedded View is optional and only works when your
-          browser allows it — usually when Home Assistant and ZigbeeLens Core both use HTTPS.
+          The native companion panel works for all installs without iframing Core.
+          Open Full Dashboard opens the full dashboard in a new tab. Try Embedded View
+          is optional and only loads when you choose it.
         </p>
       </div>
     `;

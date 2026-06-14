@@ -4,7 +4,8 @@ Registers a custom Home Assistant sidebar panel (a status/launcher surface, not
 the full product UI) plus a websocket command that returns a redacted summary
 built entirely from HA-side coordinator data.
 
-When HA and Core share the same scheme, the panel JS auto-embeds the full Core UI.
+The sidebar never iframes Core by default. Optional Try Embedded View in the
+panel JS is manual only; Open Full Dashboard always opens Core in a new tab.
 """
 
 from __future__ import annotations
@@ -84,11 +85,16 @@ async def async_register_panel(hass: HomeAssistant, entry_id: str, core_url: str
     await async_setup_frontend(hass)
     state = hass.data.setdefault(DOMAIN, {}).setdefault(PANEL_STATE_KEY, {})
 
-    # Re-register when the panel already exists so upgrades pick up embed_iframe=False
-    # and config.core_url (fixes sidebar disappearing with HTTPS FQDN Core URLs).
-    if PANEL_URL_PATH in hass.data.get(frontend.DATA_PANELS, {}):
-        frontend.async_remove_panel(hass, PANEL_URL_PATH)
-        state["panel_registered"] = False
+    panels = hass.data.get(frontend.DATA_PANELS, {})
+    existing = panels.get(PANEL_URL_PATH)
+    if existing is not None:
+        async_update_panel_core_url(hass, core_url)
+        state["panel_registered"] = True
+        return
+
+    if state.get("panel_registered"):
+        async_update_panel_core_url(hass, core_url)
+        return
 
     await panel_custom.async_register_panel(
         hass,

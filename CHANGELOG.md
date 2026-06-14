@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-06-15
+
+### Fixed
+
+- Sidebar stability: stop auto-embedding Core on HTTPS+HTTPS (iframe not required for the companion panel)
+- Revert force panel remove/re-register on every setup (ThreadLens pattern — update `core_url` in place)
+
+### Changed
+
+- Default sidebar view is always the native summary panel (HA websocket only); Try Embedded View is manual optional only
+
 ## [0.1.8] - 2026-06-15
 
 ### Fixed
