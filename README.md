@@ -30,8 +30,10 @@ Run Core using one of:
 ## What this integration does
 
 - Summary sensors and binary sensors
-- Sidebar panel opening the **Core dashboard**
+- A native companion panel with an **Open Full Dashboard** button (opens Core in a new tab)
 - Redacted diagnostics and repairs
+
+The full ZigbeeLens dashboard is hosted by Core and opens separately. This works for normal Docker installs without a reverse proxy and avoids browser iframe restrictions when Home Assistant uses HTTPS and Core uses HTTP.
 
 ## What it does not do
 
