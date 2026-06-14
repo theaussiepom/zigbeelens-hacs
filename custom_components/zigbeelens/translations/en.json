@@ -1,0 +1,79 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to ZigbeeLens Core",
+        "description": "Enter the URL of your running ZigbeeLens Core service.",
+        "data": {
+          "core_url": "Core URL",
+          "verify_ssl": "Verify SSL certificate",
+          "panel_enabled": "Enable sidebar panel"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to ZigbeeLens Core at the configured URL.",
+      "invalid_url": "Enter a valid URL including http:// or https://.",
+      "invalid_response": "The endpoint did not return a valid ZigbeeLens response.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This ZigbeeLens Core URL is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ZigbeeLens options",
+        "data": {
+          "core_url": "Core URL",
+          "verify_ssl": "Verify SSL certificate",
+          "panel_enabled": "Enable sidebar panel",
+          "scan_interval": "Polling interval (seconds)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "active_incident": { "name": "Active incident" },
+      "core_connected": { "name": "Core connected" },
+      "mqtt_collector_connected": { "name": "MQTT collector connected" }
+    },
+    "sensor": {
+      "overall_health": { "name": "Overall health" },
+      "incident_state": { "name": "Incident state" },
+      "unavailable_devices": { "name": "Unavailable devices" },
+      "recently_unstable_devices": { "name": "Recently unstable devices" },
+      "router_risks": { "name": "Router risks" },
+      "stale_devices": { "name": "Stale devices" },
+      "weak_link_devices": { "name": "Weak link devices" },
+      "low_battery_devices": { "name": "Low battery devices" },
+      "unknown_devices": { "name": "Unknown devices" },
+      "network_count": { "name": "Network count" },
+      "device_count": { "name": "Device count" }
+    }
+  },
+  "issues": {
+    "core_unreachable": {
+      "title": "ZigbeeLens Core is unreachable",
+      "description": "Home Assistant cannot reach ZigbeeLens Core at the configured URL."
+    },
+    "collector_disconnected": {
+      "title": "MQTT collector disconnected",
+      "description": "ZigbeeLens Core is running but the read-only MQTT collector is disconnected."
+    },
+    "no_networks_configured": {
+      "title": "No Zigbee2MQTT networks configured",
+      "description": "ZigbeeLens Core reports zero configured networks."
+    },
+    "no_mqtt_data": {
+      "title": "No MQTT data observed yet",
+      "description": "Networks are configured but ZigbeeLens has not observed device data yet."
+    },
+    "mock_mode_active": {
+      "title": "Mock mode active",
+      "description": "ZigbeeLens Core is running in mock mode rather than live MQTT collection."
+    }
+  }
+}

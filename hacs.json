@@ -1,0 +1,6 @@
+{
+  "name": "ZigbeeLens",
+  "content_in_root": true,
+  "render_readme": true,
+  "homeassistant": "2025.1.0"
+}
