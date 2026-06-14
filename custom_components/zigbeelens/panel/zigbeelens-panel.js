@@ -317,11 +317,15 @@ ZigbeeLensPanel.styles = `
     min-height: 100%;
     color: var(--primary-text-color, #212121);
     font-family: var(--paper-font-body1_-_font-family, Roboto, system-ui, sans-serif);
+    overflow-x: clip;
   }
   .wrap {
     max-width: 880px;
     margin: 0 auto;
     padding: 16px;
+    padding-left: max(16px, env(safe-area-inset-left, 0));
+    padding-right: max(16px, env(safe-area-inset-right, 0));
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0));
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -333,11 +337,12 @@ ZigbeeLensPanel.styles = `
     border-radius: var(--ha-card-border-radius, 12px);
     padding: 20px;
     box-shadow: var(--ha-card-box-shadow, none);
+    overflow: hidden;
   }
   h1 { font-size: 1.4rem; margin: 0; line-height: 1.2; }
   h2 { font-size: 1.05rem; margin: 0 0 12px; }
   .subtitle, .muted { color: var(--secondary-text-color, #727272); }
-  .muted { font-size: 0.92rem; line-height: 1.5; }
+  .muted { font-size: 0.92rem; line-height: 1.5; word-break: break-word; }
   code {
     background: var(--secondary-background-color, #f0f0f0);
     padding: 2px 6px;
@@ -352,12 +357,13 @@ ZigbeeLensPanel.styles = `
     align-items: center;
     justify-content: space-between;
   }
-  .hero-title { display: flex; align-items: center; gap: 12px; }
+  .hero-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .logo {
     width: 44px; height: 44px;
     border-radius: 12px;
     display: flex; align-items: center; justify-content: center;
     font-weight: 700;
+    flex-shrink: 0;
     background: color-mix(in srgb, var(--primary-color, #03a9f4) 18%, transparent);
     color: var(--primary-color, #03a9f4);
   }
@@ -378,8 +384,8 @@ ZigbeeLensPanel.styles = `
   .badge.incident, .badge.off { --badge: var(--error-color, #c62828); }
   .btn {
     display: inline-flex; align-items: center; justify-content: center;
-    min-height: 44px;
-    padding: 10px 18px;
+    min-height: 48px;
+    padding: 12px 18px;
     border-radius: 10px;
     border: 1px solid var(--divider-color, #e0e0e0);
     background: var(--secondary-background-color, #f0f0f0);
@@ -389,21 +395,24 @@ ZigbeeLensPanel.styles = `
     cursor: pointer;
     text-decoration: none;
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
   }
   .btn:hover { filter: brightness(0.97); }
+  .btn:active { filter: brightness(0.93); }
   .btn.primary {
     margin-top: 16px;
     width: 100%;
     background: var(--primary-color, #03a9f4);
     border-color: var(--primary-color, #03a9f4);
     color: var(--text-primary-color, #fff);
-    font-size: 1rem;
+    font-size: 1.05rem;
+    min-height: 52px;
   }
   .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-  .finding { margin: 0; line-height: 1.55; font-size: 1rem; }
+  .finding { margin: 0; line-height: 1.55; font-size: 1rem; word-break: break-word; }
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     gap: 12px;
   }
   .stat {
@@ -411,40 +420,52 @@ ZigbeeLensPanel.styles = `
     border-radius: 10px;
     padding: 14px 12px;
     text-align: center;
+    min-width: 0;
   }
   .stat-value { font-size: 1.7rem; font-weight: 700; line-height: 1; }
-  .stat-label { margin-top: 6px; font-size: 0.78rem; color: var(--secondary-text-color, #727272); }
+  .stat-label { margin-top: 6px; font-size: 0.78rem; color: var(--secondary-text-color, #727272); line-height: 1.3; }
   .net-list { display: flex; flex-direction: column; gap: 10px; }
   .net-row {
-    display: flex; align-items: center; justify-content: space-between;
+    display: flex; align-items: flex-start; justify-content: space-between;
     gap: 12px; flex-wrap: wrap;
     padding: 12px;
     border-radius: 10px;
     background: var(--secondary-background-color, #f7f7f7);
   }
-  .net-main { display: flex; align-items: center; gap: 10px; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-  .net-name { font-weight: 600; }
+  .net-main { display: flex; align-items: flex-start; gap: 10px; min-width: 0; flex: 1; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .net-name { font-weight: 600; word-break: break-word; }
   .net-sub { font-size: 0.82rem; color: var(--secondary-text-color, #727272); }
-  .net-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.85rem; color: var(--secondary-text-color, #727272); }
+  .net-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.85rem; color: var(--secondary-text-color, #727272); width: 100%; }
   .warn { color: var(--warning-color, #f9a825); font-weight: 600; }
   .ok-text { color: var(--success-color, #2e7d32); font-weight: 600; }
   .meta { margin: 0; display: flex; flex-direction: column; gap: 10px; }
-  .meta div { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
-  .meta dt { color: var(--secondary-text-color, #727272); font-size: 0.9rem; }
-  .meta dd { margin: 0; text-align: right; }
+  .meta div { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  .meta dt { color: var(--secondary-text-color, #727272); font-size: 0.9rem; flex-shrink: 0; }
+  .meta dd { margin: 0; text-align: right; min-width: 0; word-break: break-all; }
   .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .actions .btn { flex: 1 1 auto; min-width: min(100%, 140px); }
   .note {
     color: var(--secondary-text-color, #727272);
     font-size: 0.82rem;
     line-height: 1.5;
     margin: 0 4px;
     text-align: center;
+    word-break: break-word;
   }
   @media (max-width: 600px) {
-    .wrap { padding: 12px; }
+    .wrap { padding: 12px; gap: 12px; }
     .card { padding: 16px; }
+    .hero-head { flex-direction: column; align-items: stretch; }
+    .badges { justify-content: flex-start; }
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stat-value { font-size: 1.5rem; }
+    .net-row { flex-direction: column; align-items: stretch; }
+    .net-meta { width: 100%; }
+    .meta div { flex-direction: column; align-items: stretch; gap: 4px; }
     .meta dd { text-align: left; }
+    .actions { flex-direction: column; }
+    .actions .btn { width: 100%; min-width: 0; }
   }
 `;
 

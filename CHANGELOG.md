@@ -5,6 +5,16 @@ All notable changes to ZigbeeLens are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Phase 14 mobile/responsive polish for Core React dashboard (overflow guards, touch targets, mono text wrapping, responsive stat grids)
+- Phase 14 mobile polish for HACS native companion panel (safe-area padding, stacked layouts on narrow screens, larger primary CTA)
+- HACS sidebar is a native companion panel with Open Full Dashboard button — does not iframe Core
+- Documentation and `RELEASE_CHECKLIST.md` updated for Docker + HACS + add-on architecture
+- Add-on defaults: `mqtt_discovery.enabled: false`, explicit `privileged: false`, `armv7` removed (matches GHCR amd64/arm64 builds)
+
 ## [0.1.0] - 2026-06-14
 
 Initial public release.
@@ -21,7 +31,7 @@ Initial public release.
 - Redacted JSON, YAML, and Markdown reports
 - Home Assistant OS add-on with Ingress
 - Docker and Compose install path
-- HACS Home Assistant integration (summary entities, panel, diagnostics, repairs)
+- HACS Home Assistant integration (summary entities, native companion panel, Open Full Dashboard button, diagnostics, repairs)
 - Optional MQTT Discovery summary entities
 - Optional topology snapshots (manual capture, feature-gated)
 - Optional Home Assistant device enrichment API
