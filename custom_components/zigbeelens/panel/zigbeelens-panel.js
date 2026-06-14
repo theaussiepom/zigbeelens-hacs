@@ -1,12 +1,11 @@
 /**
  * ZigbeeLens companion panel (native Home Assistant custom panel).
  *
- * A status/launcher surface — NOT the full ZigbeeLens dashboard. It renders a
- * redacted summary fetched over the HA websocket (zigbeelens/panel_summary), so
- * the browser never fetches ZigbeeLens Core directly. This avoids mixed-content
- * blocking when HA is HTTPS and Core is HTTP, and needs no reverse proxy.
+ * Default view: redacted status summary over the HA websocket (no direct Core fetch).
+ * Optional secondary view: embedded full Core dashboard when browser security allows.
  *
- * The full dashboard is served by Core and opened in a new tab via the button.
+ * Primary action: Open Full Dashboard (new tab — always reliable).
+ * Secondary action: Try Embedded View (iframe — only when not mixed-content blocked).
  */
 
 const SEVERITY = {
@@ -15,6 +14,27 @@ const SEVERITY = {
   incident: { label: "Incident", color: "var(--error-color, #c62828)" },
   unknown: { label: "No signal", color: "var(--secondary-text-color, #888)" },
 };
+
+/** @returns {{ canEmbed: boolean, reason?: string }} */
+function canEmbedDashboard(haProtocol, coreUrl, baseHref) {
+  try {
+    const ha = String(haProtocol || "").toLowerCase();
+    if (!ha.endsWith(":")) {
+      return { canEmbed: false, reason: "invalid_ha" };
+    }
+    if (!coreUrl || !String(coreUrl).trim()) {
+      return { canEmbed: false, reason: "missing_core_url" };
+    }
+    const core = new URL(String(coreUrl).trim(), baseHref || window.location.href);
+    if (!core.protocol || !core.host) {
+      return { canEmbed: false, reason: "invalid_core_url" };
+    }
+    const isMixedContentIframe = ha === "https:" && core.protocol === "http:";
+    return { canEmbed: !isMixedContentIframe };
+  } catch {
+    return { canEmbed: false, reason: "invalid_core_url" };
+  }
+}
 
 function esc(value) {
   if (value === null || value === undefined) return "";
@@ -57,6 +77,7 @@ class ZigbeeLensPanel extends HTMLElement {
     this._loaded = false;
     this._copied = false;
     this._configCoreUrl = "";
+    this._view = "summary";
   }
 
   set panel(panel) {
@@ -97,9 +118,66 @@ class ZigbeeLensPanel extends HTMLElement {
     return (this._summary && this._summary.core_url) || this._configCoreUrl || "";
   }
 
-  _render() {
-    const s = this._summary || {};
+  _openDashboardButton(coreUrl, extraClass = "") {
+    if (!coreUrl) return "";
+    return `<a class="btn primary ${extraClass}" href="${esc(coreUrl)}" target="_blank" rel="noopener noreferrer">
+      Open full ZigbeeLens dashboard
+    </a>`;
+  }
+
+  _tryEmbedButton() {
+    return `<button type="button" class="btn secondary" id="try-embed">Try Embedded View</button>`;
+  }
+
+  _ctaRow(coreUrl, { includeEmbed = true } = {}) {
+    const open = this._openDashboardButton(coreUrl);
+    const embed = includeEmbed && coreUrl ? this._tryEmbedButton() : "";
+    if (!open && !embed) return "";
+    return `<div class="cta-row">${open}${embed}</div>`;
+  }
+
+  _backButton() {
+    return `<button type="button" class="btn" id="back-summary">Back to Summary</button>`;
+  }
+
+  _tryEmbeddedView() {
     const coreUrl = this._coreUrl();
+    const { canEmbed } = canEmbedDashboard(window.location.protocol, coreUrl, window.location.href);
+    this._view = canEmbed ? "embedded" : "embed_blocked";
+    this._render();
+  }
+
+  _backToSummary() {
+    this._view = "summary";
+    this._render();
+  }
+
+  _render() {
+    const coreUrl = this._coreUrl();
+
+    if (this._view === "embedded") {
+      this.shadowRoot.innerHTML = `
+        <style>${ZigbeeLensPanel.styles}</style>
+        <div class="wrap embed-wrap">
+          ${this._embeddedView(coreUrl)}
+        </div>
+      `;
+      this._wire();
+      return;
+    }
+
+    if (this._view === "embed_blocked") {
+      this.shadowRoot.innerHTML = `
+        <style>${ZigbeeLensPanel.styles}</style>
+        <div class="wrap">
+          ${this._embedBlockedView(coreUrl)}
+        </div>
+      `;
+      this._wire();
+      return;
+    }
+
+    const s = this._summary || {};
     const connected = !!s.connected;
 
     this.shadowRoot.innerHTML = `
@@ -113,14 +191,57 @@ class ZigbeeLensPanel extends HTMLElement {
         ${!this._loading && connected ? this._networksCard(s) : ""}
         ${!this._loading ? this._integrationCard(s, coreUrl, connected) : ""}
         <p class="note">
-          The full ZigbeeLens dashboard opens separately. This avoids browser
-          iframe restrictions when Home Assistant uses HTTPS and ZigbeeLens Core
-          uses HTTP.
+          The full ZigbeeLens dashboard opens in a separate tab by default. You can also
+          try an optional embedded view when your browser allows it.
         </p>
       </div>
     `;
 
     this._wire();
+  }
+
+  _embeddedView(coreUrl) {
+    const iframe = coreUrl
+      ? `<iframe
+          class="embed-frame"
+          src="${esc(coreUrl)}"
+          title="ZigbeeLens full dashboard"
+          loading="lazy"
+          referrerpolicy="no-referrer"
+        ></iframe>`
+      : `<p class="muted">Core URL is not configured.</p>`;
+    return `
+      <section class="card embed-card">
+        <div class="embed-toolbar">
+          ${this._backButton()}
+          ${this._openDashboardButton(coreUrl, "embed-open")}
+        </div>
+        ${iframe}
+      </section>
+    `;
+  }
+
+  _embedBlockedView(coreUrl) {
+    return `
+      <section class="card">
+        <h2>Embedded view is blocked by browser security</h2>
+        <p class="muted">
+          Home Assistant is being served over HTTPS, while ZigbeeLens Core is being served
+          over HTTP. Browsers do not allow HTTP dashboards to be embedded inside HTTPS pages.
+        </p>
+        <p class="muted">
+          You can still open the full ZigbeeLens dashboard in a separate tab.
+        </p>
+        <p class="note-inline">
+          Advanced users can serve ZigbeeLens Core over HTTPS if they want embedded mode.
+          This is optional and not required for normal use.
+        </p>
+        <div class="actions">
+          ${this._openDashboardButton(coreUrl)}
+          ${this._backButton()}
+        </div>
+      </section>
+    `;
   }
 
   _heroCard(s, coreUrl, connected) {
@@ -133,11 +254,6 @@ class ZigbeeLensPanel extends HTMLElement {
         ? `<span class="badge" style="--badge:${sev.color}">Health: ${esc(sev.label)}</span>`
         : "";
     const mockBadge = s.mock_mode ? `<span class="badge watch">Mock data</span>` : "";
-    const openBtn = coreUrl
-      ? `<a class="btn primary" href="${esc(coreUrl)}" target="_blank" rel="noopener noreferrer">
-           Open full ZigbeeLens dashboard
-         </a>`
-      : "";
     return `
       <section class="card hero">
         <div class="hero-head">
@@ -150,7 +266,7 @@ class ZigbeeLensPanel extends HTMLElement {
           </div>
           <div class="badges">${connBadge}${healthBadge}${mockBadge}</div>
         </div>
-        ${openBtn}
+        ${this._ctaRow(coreUrl)}
       </section>
     `;
   }
@@ -160,11 +276,6 @@ class ZigbeeLensPanel extends HTMLElement {
   }
 
   _disconnectedCard(s, coreUrl) {
-    const openBtn = coreUrl
-      ? `<a class="btn primary" href="${esc(coreUrl)}" target="_blank" rel="noopener noreferrer">
-           Open full ZigbeeLens dashboard
-         </a>`
-      : "";
     return `
       <section class="card">
         <h2>ZigbeeLens Core is not responding</h2>
@@ -174,8 +285,9 @@ class ZigbeeLensPanel extends HTMLElement {
           from Home Assistant, then reload the status below.
         </p>
         <div class="actions">
-          ${openBtn}
-          <button class="btn" id="reload">Reload status</button>
+          ${this._openDashboardButton(coreUrl)}
+          ${coreUrl ? this._tryEmbedButton() : ""}
+          <button type="button" class="btn" id="reload">Reload status</button>
         </div>
       </section>
     `;
@@ -279,14 +391,20 @@ class ZigbeeLensPanel extends HTMLElement {
           <div><dt>Last update</dt><dd>${esc(lastUpdate)}</dd></div>
         </dl>
         <div class="actions">
-          ${coreUrl ? `<button class="btn" id="copy">${this._copied ? "Copied!" : "Copy Core URL"}</button>` : ""}
-          <button class="btn" id="reload">Reload status</button>
+          ${coreUrl ? `<button type="button" class="btn" id="copy">${this._copied ? "Copied!" : "Copy Core URL"}</button>` : ""}
+          <button type="button" class="btn" id="reload">Reload status</button>
         </div>
       </section>
     `;
   }
 
   _wire() {
+    const tryEmbed = this.shadowRoot.getElementById("try-embed");
+    if (tryEmbed) tryEmbed.addEventListener("click", () => this._tryEmbeddedView());
+
+    const back = this.shadowRoot.getElementById("back-summary");
+    if (back) back.addEventListener("click", () => this._backToSummary());
+
     const reload = this.shadowRoot.getElementById("reload");
     if (reload) reload.addEventListener("click", () => this._loadSummary());
 
@@ -331,6 +449,11 @@ ZigbeeLensPanel.styles = `
     gap: 16px;
     box-sizing: border-box;
   }
+  .embed-wrap {
+    max-width: none;
+    height: calc(100vh - 32px);
+    min-height: 480px;
+  }
   .card {
     background: var(--card-background-color, #fff);
     border: 1px solid var(--divider-color, #e0e0e0);
@@ -339,10 +462,23 @@ ZigbeeLensPanel.styles = `
     box-shadow: var(--ha-card-box-shadow, none);
     overflow: hidden;
   }
+  .embed-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    padding: 12px;
+  }
   h1 { font-size: 1.4rem; margin: 0; line-height: 1.2; }
   h2 { font-size: 1.05rem; margin: 0 0 12px; }
   .subtitle, .muted { color: var(--secondary-text-color, #727272); }
   .muted { font-size: 0.92rem; line-height: 1.5; word-break: break-word; }
+  .note-inline {
+    color: var(--secondary-text-color, #727272);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    margin: 12px 0 0;
+  }
   code {
     background: var(--secondary-background-color, #f0f0f0);
     padding: 2px 6px;
@@ -400,13 +536,53 @@ ZigbeeLensPanel.styles = `
   .btn:hover { filter: brightness(0.97); }
   .btn:active { filter: brightness(0.93); }
   .btn.primary {
-    margin-top: 16px;
-    width: 100%;
     background: var(--primary-color, #03a9f4);
     border-color: var(--primary-color, #03a9f4);
     color: var(--text-primary-color, #fff);
     font-size: 1.05rem;
     min-height: 52px;
+  }
+  .btn.secondary {
+    background: transparent;
+    border-color: var(--divider-color, #e0e0e0);
+    color: var(--primary-text-color, #212121);
+    font-weight: 600;
+  }
+  .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .cta-row .btn.primary {
+    flex: 2 1 220px;
+    margin-top: 0;
+    width: auto;
+  }
+  .cta-row .btn.secondary {
+    flex: 1 1 160px;
+  }
+  .embed-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+  .embed-toolbar .btn.primary.embed-open {
+    margin-left: auto;
+    min-height: 44px;
+    font-size: 0.95rem;
+    flex: 1 1 auto;
+    width: auto;
+  }
+  .embed-frame {
+    width: 100%;
+    flex: 1;
+    min-height: 360px;
+    border: 1px solid var(--divider-color, #e0e0e0);
+    border-radius: 10px;
+    background: var(--card-background-color, #fff);
   }
   .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   .finding { margin: 0; line-height: 1.55; font-size: 1rem; word-break: break-word; }
@@ -455,6 +631,7 @@ ZigbeeLensPanel.styles = `
   }
   @media (max-width: 600px) {
     .wrap { padding: 12px; gap: 12px; }
+    .embed-wrap { height: calc(100vh - 24px); min-height: 420px; }
     .card { padding: 16px; }
     .hero-head { flex-direction: column; align-items: stretch; }
     .badges { justify-content: flex-start; }
@@ -466,9 +643,19 @@ ZigbeeLensPanel.styles = `
     .meta dd { text-align: left; }
     .actions { flex-direction: column; }
     .actions .btn { width: 100%; min-width: 0; }
+    .cta-row { flex-direction: column; }
+    .cta-row .btn.primary,
+    .cta-row .btn.secondary { width: 100%; flex: 1 1 auto; }
+    .embed-toolbar { flex-direction: column; }
+    .embed-toolbar .btn.primary.embed-open { margin-left: 0; width: 100%; }
   }
 `;
 
 if (!customElements.get("zigbeelens-panel")) {
   customElements.define("zigbeelens-panel", ZigbeeLensPanel);
+}
+
+// Exported for lightweight testing in Node (see test_panel_embed.py asset checks).
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { canEmbedDashboard };
 }

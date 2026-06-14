@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- HACS companion panel: optional **Try Embedded View** secondary action with mixed-content safety checks; default remains native summary + Open Full Dashboard in new tab
 - Phase 14 mobile/responsive polish for Core React dashboard (overflow guards, touch targets, mono text wrapping, responsive stat grids)
 - Phase 14 mobile polish for HACS native companion panel (safe-area padding, stacked layouts on narrow screens, larger primary CTA)
 - HACS sidebar is a native companion panel with Open Full Dashboard button — does not iframe Core
