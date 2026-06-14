@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-06-15
+
+### Fixed
+
+- **Home Assistant main sidebar sliding away** on the ZigbeeLens panel page: add menu (☰) button that fires `hass-toggle-menu` so you can reopen HA navigation
+- Re-register panel when a stale registration used `embed_iframe=True` or lacked `core_url`
+- Stop using full-viewport `100vh` layout that could collapse HA's drawer on custom panels
+
+### Changed
+
+- Panel listens for HA's `narrow` property (responsive layout)
+
 ## [0.1.9] - 2026-06-15
 
 ### Fixed

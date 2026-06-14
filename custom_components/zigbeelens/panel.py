@@ -88,9 +88,15 @@ async def async_register_panel(hass: HomeAssistant, entry_id: str, core_url: str
     panels = hass.data.get(frontend.DATA_PANELS, {})
     existing = panels.get(PANEL_URL_PATH)
     if existing is not None:
-        async_update_panel_core_url(hass, core_url)
-        state["panel_registered"] = True
-        return
+        config = existing.get("config") or {}
+        custom_meta = config.get("_panel_custom") or {}
+        if custom_meta.get("embed_iframe") or not config.get("core_url"):
+            frontend.async_remove_panel(hass, PANEL_URL_PATH)
+            state["panel_registered"] = False
+        else:
+            async_update_panel_core_url(hass, core_url)
+            state["panel_registered"] = True
+            return
 
     if state.get("panel_registered"):
         async_update_panel_core_url(hass, core_url)

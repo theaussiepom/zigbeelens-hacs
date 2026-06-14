@@ -78,10 +78,19 @@ class ZigbeeLensPanel extends HTMLElement {
     this._copied = false;
     this._configCoreUrl = "";
     this._view = "summary";
+    this._narrow = false;
   }
 
   set panel(panel) {
     this._configCoreUrl = (panel && panel.config && panel.config.core_url) || "";
+  }
+
+  set narrow(n) {
+    this._narrow = Boolean(n);
+    this.classList.toggle("narrow", this._narrow);
+    if (this.shadowRoot && this.shadowRoot.childNodes.length) {
+      this._render();
+    }
   }
 
   set hass(hass) {
@@ -136,6 +145,20 @@ class ZigbeeLensPanel extends HTMLElement {
     return `<div class="cta-row">${open}${embed}</div>`;
   }
 
+  _haMenuButton() {
+    return `<button type="button" class="menu-btn" id="menu-btn" aria-label="Open Home Assistant menu">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2z"/></svg>
+    </button>`;
+  }
+
+  _panelToolbar(extra = "") {
+    return `<div class="panel-toolbar">${this._haMenuButton()}${extra}</div>`;
+  }
+
+  _toggleHaSidebar() {
+    this.dispatchEvent(new Event("hass-toggle-menu", { bubbles: true, composed: true }));
+  }
+
   _tryEmbeddedView() {
     const coreUrl = this._coreUrl();
     const { canEmbed } = canEmbedDashboard(window.location.protocol, coreUrl, window.location.href);
@@ -149,6 +172,7 @@ class ZigbeeLensPanel extends HTMLElement {
     if (this._view === "embedded") {
       this.shadowRoot.innerHTML = `
         <style>${ZigbeeLensPanel.styles}</style>
+        ${this._panelToolbar()}
         <div class="wrap embed-wrap">
           ${this._embeddedView(coreUrl)}
         </div>
@@ -160,6 +184,7 @@ class ZigbeeLensPanel extends HTMLElement {
     if (this._view === "embed_blocked") {
       this.shadowRoot.innerHTML = `
         <style>${ZigbeeLensPanel.styles}</style>
+        ${this._panelToolbar()}
         <div class="wrap">
           ${this._embedBlockedView(coreUrl)}
         </div>
@@ -173,6 +198,7 @@ class ZigbeeLensPanel extends HTMLElement {
 
     this.shadowRoot.innerHTML = `
       <style>${ZigbeeLensPanel.styles}</style>
+      ${this._panelToolbar()}
       <div class="wrap">
         ${this._heroCard(s, coreUrl, connected)}
         ${this._loading ? this._loadingCard() : ""}
@@ -386,6 +412,9 @@ class ZigbeeLensPanel extends HTMLElement {
   }
 
   _wire() {
+    const menuBtn = this.shadowRoot.getElementById("menu-btn");
+    if (menuBtn) menuBtn.addEventListener("click", () => this._toggleHaSidebar());
+
     const tryEmbed = this.shadowRoot.getElementById("try-embed");
     if (tryEmbed) tryEmbed.addEventListener("click", () => this._tryEmbeddedView());
 
@@ -435,9 +464,38 @@ ZigbeeLensPanel.styles = `
   }
   .embed-wrap {
     max-width: none;
-    height: calc(100vh - 32px);
+    height: calc(100% - 8px);
     min-height: 480px;
   }
+  .panel-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px 0;
+    max-width: 880px;
+    margin: 0 auto;
+    box-sizing: border-box;
+  }
+  .menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--divider-color, #e0e0e0);
+    border-radius: 10px;
+    background: var(--card-background-color, #fff);
+    color: var(--primary-text-color, #212121);
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .menu-btn svg {
+    width: 22px;
+    height: 22px;
+  }
+  .menu-btn:hover { filter: brightness(0.97); }
+  .menu-btn:active { filter: brightness(0.93); }
   .card {
     background: var(--card-background-color, #fff);
     border: 1px solid var(--divider-color, #e0e0e0);
@@ -615,7 +673,7 @@ ZigbeeLensPanel.styles = `
   }
   @media (max-width: 600px) {
     .wrap { padding: 12px; gap: 12px; }
-    .embed-wrap { height: calc(100vh - 24px); min-height: 420px; }
+    .embed-wrap { min-height: 420px; }
     .card { padding: 16px; }
     .hero-head { flex-direction: column; align-items: stretch; }
     .badges { justify-content: flex-start; }
