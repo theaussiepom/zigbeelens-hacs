@@ -191,8 +191,9 @@ class ZigbeeLensPanel extends HTMLElement {
         ${!this._loading && connected ? this._networksCard(s) : ""}
         ${!this._loading ? this._integrationCard(s, coreUrl, connected) : ""}
         <p class="note">
-          The full ZigbeeLens dashboard opens in a separate tab by default. You can also
-          try an optional embedded view when your browser allows it.
+          The native panel works for all installs. Open Full Dashboard opens the full
+          dashboard in a new tab. Try Embedded View is optional and only works when your
+          browser allows it — usually when Home Assistant and ZigbeeLens Core both use HTTPS.
         </p>
       </div>
     `;
@@ -224,16 +225,16 @@ class ZigbeeLensPanel extends HTMLElement {
   _embedBlockedView(coreUrl) {
     return `
       <section class="card">
-        <h2>Embedded view is blocked by browser security</h2>
+        <h2>Embedded view is not available</h2>
         <p class="muted">
-          Home Assistant is being served over HTTPS, while ZigbeeLens Core is being served
-          over HTTP. Browsers do not allow HTTP dashboards to be embedded inside HTTPS pages.
+          Home Assistant is using HTTPS, but your ZigbeeLens Core URL uses HTTP.
+          Browsers block HTTP dashboards from being embedded inside HTTPS pages.
         </p>
         <p class="muted">
           You can still open the full ZigbeeLens dashboard in a separate tab.
         </p>
         <p class="note-inline">
-          Advanced users can serve ZigbeeLens Core over HTTPS if they want embedded mode.
+          If you want embedded view later, configure ZigbeeLens with an HTTPS dashboard address.
           This is optional and not required for normal use.
         </p>
         <div class="actions">

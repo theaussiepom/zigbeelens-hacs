@@ -35,6 +35,8 @@ Run Core using one of:
 
 The full ZigbeeLens dashboard is hosted by Core and opens separately. This works for normal Docker installs without a reverse proxy and avoids browser iframe restrictions when Home Assistant uses HTTPS and Core uses HTTP.
 
+Optional: enable **Try Embedded View** by putting Core behind HTTPS — see [hacs-embedded-view.md](https://github.com/theaussiepom/zigbeelens/blob/main/docs/hacs-embedded-view.md) in the main repo.
+
 ## What it does not do
 
 - Does **not** mutate Zigbee devices

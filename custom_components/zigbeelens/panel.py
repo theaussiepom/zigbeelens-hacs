@@ -4,9 +4,8 @@ Registers a custom Home Assistant sidebar panel (a status/launcher surface, not
 the full product UI) plus a websocket command that returns a redacted summary
 built entirely from HA-side coordinator data.
 
-The panel deliberately does not iframe Core and never makes the browser fetch
-Core directly. This means it works reliably even when Home Assistant is served
-over HTTPS and ZigbeeLens Core is served over HTTP, without a reverse proxy.
+The default view never iframes Core. Optional Try Embedded View in the panel JS
+only loads when browser security allows it (for example HTTPS Core with HTTPS HA).
 """
 
 from __future__ import annotations
@@ -85,25 +84,39 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
 async def async_register_panel(hass: HomeAssistant, entry_id: str, core_url: str) -> None:
     """Register the native companion panel in the Home Assistant sidebar."""
     runtime = hass.data.setdefault(DOMAIN, {}).setdefault(entry_id, {})
-    if runtime.get("panel_registered"):
-        return
-
     await async_setup_frontend(hass)
 
-    if PANEL_URL_PATH not in hass.data.get(frontend.DATA_PANELS, {}):
-        await panel_custom.async_register_panel(
-            hass,
-            frontend_url_path=PANEL_URL_PATH,
-            webcomponent_name=PANEL_WEBCOMPONENT,
-            sidebar_title="ZigbeeLens",
-            sidebar_icon="mdi:zigbee",
-            module_url=PANEL_STATIC_URL,
-            embed_iframe=False,
-            require_admin=False,
-            config={"core_url": core_url},
-        )
+    if PANEL_URL_PATH in hass.data.get(frontend.DATA_PANELS, {}):
+        async_update_panel_core_url(hass, core_url)
+        runtime["panel_registered"] = True
+        return
+
+    if runtime.get("panel_registered"):
+        async_update_panel_core_url(hass, core_url)
+        return
+
+    await panel_custom.async_register_panel(
+        hass,
+        frontend_url_path=PANEL_URL_PATH,
+        webcomponent_name=PANEL_WEBCOMPONENT,
+        sidebar_title="ZigbeeLens",
+        sidebar_icon="mdi:zigbee",
+        module_url=PANEL_STATIC_URL,
+        embed_iframe=False,
+        require_admin=False,
+        config={"core_url": core_url},
+    )
     runtime["panel_registered"] = True
     _LOGGER.debug("Registered ZigbeeLens companion panel (core_url=%s)", core_url)
+
+
+@callback
+def async_update_panel_core_url(hass: HomeAssistant, core_url: str) -> None:
+    """Update the companion panel launcher URL after Configure / options changes."""
+    panels = hass.data.get(frontend.DATA_PANELS, {})
+    panel = panels.get(PANEL_URL_PATH)
+    if panel is not None:
+        panel["config"] = {**(panel.get("config") or {}), "core_url": core_url}
 
 
 async def async_unregister_panel(hass: HomeAssistant, entry_id: str) -> None:

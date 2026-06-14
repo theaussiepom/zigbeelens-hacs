@@ -3,11 +3,14 @@
     "step": {
       "user": {
         "title": "Connect to ZigbeeLens Core",
-        "description": "Enter the URL of your running ZigbeeLens Core service.",
+        "description": "Enter the address of your ZigbeeLens Core dashboard. HTTP is fine for the native Home Assistant panel and Open Full Dashboard. Use an HTTPS address if you want the optional embedded dashboard view inside Home Assistant.",
         "data": {
           "core_url": "Core URL",
           "verify_ssl": "Verify SSL certificate",
           "panel_enabled": "Show ZigbeeLens companion panel in the sidebar"
+        },
+        "data_description": {
+          "core_url": "For example http://192.168.1.10:8377 or https://zigbeelens.example.com"
         }
       }
     },
@@ -25,11 +28,15 @@
     "step": {
       "init": {
         "title": "ZigbeeLens options",
+        "description": "Change the ZigbeeLens Core URL or panel options. HTTP is fine for the native panel and Open Full Dashboard. Use an HTTPS Core URL if you want the optional embedded dashboard view inside Home Assistant.",
         "data": {
           "core_url": "Core URL",
           "verify_ssl": "Verify SSL certificate",
           "panel_enabled": "Show ZigbeeLens companion panel in the sidebar",
           "scan_interval": "Polling interval (seconds)"
+        },
+        "data_description": {
+          "core_url": "For example http://192.168.1.10:8377 or https://zigbeelens.example.com"
         }
       }
     }

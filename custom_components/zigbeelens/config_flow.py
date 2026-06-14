@@ -141,6 +141,7 @@ class ZigbeeLensOptionsFlow(config_entries.OptionsFlow):
             else:
                 self.hass.config_entries.async_update_entry(
                     self._config_entry,
+                    unique_id=core_url,
                     data={
                         **self._config_entry.data,
                         CONF_CORE_URL: core_url,
@@ -151,6 +152,7 @@ class ZigbeeLensOptionsFlow(config_entries.OptionsFlow):
                         CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
                     },
                 )
+                await self.hass.config_entries.async_reload(self._config_entry.entry_id)
                 return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
