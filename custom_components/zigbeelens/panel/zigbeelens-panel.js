@@ -3,7 +3,8 @@
  *
  * When HA and Core share the same scheme (HTTP+HTTP or HTTPS+HTTPS), loads the
  * full Core dashboard in an iframe. Mixed content falls back to the native summary
- * plus Open Full Dashboard. The menu button (☰) reopens HA's main sidebar.
+ * plus Open Full Dashboard. Uses Home Assistant's built-in ha-menu-button in the
+ * panel header (same pattern as HACS and Scrypted) to reopen the main sidebar.
  */
 
 const SEVERITY = {
@@ -99,7 +100,9 @@ class ZigbeeLensPanel extends HTMLElement {
     this._hass = hass;
     if (first && !this._loaded) {
       this._loadSummary();
+      return;
     }
+    this._syncHaMenuButton();
   }
 
   connectedCallback() {
@@ -164,22 +167,21 @@ class ZigbeeLensPanel extends HTMLElement {
     return `<div class="cta-row">${open}${embed}</div>`;
   }
 
-  _haMenuButton() {
-    return `<button type="button" class="menu-btn" id="menu-btn" aria-label="Open Home Assistant menu">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2z"/></svg>
-    </button>`;
+  _panelHeader({ title = "" } = {}) {
+    const titleHtml =
+      this._narrow && title ? `<div class="panel-header-title">${esc(title)}</div>` : "";
+    return `<div class="panel-header">
+      <ha-menu-button id="menu-btn"></ha-menu-button>
+      ${titleHtml}
+    </div>`;
   }
 
-  _panelToolbar({ embedded = false } = {}) {
-    const openTab =
-      embedded && this._coreUrl()
-        ? `<a class="toolbar-link" href="${esc(this._coreUrl())}" target="_blank" rel="noopener noreferrer">Open in new tab</a>`
-        : "";
-    return `<div class="panel-toolbar${embedded ? " embed-toolbar" : ""}">${this._haMenuButton()}${openTab}</div>`;
-  }
-
-  _toggleHaSidebar() {
-    this.dispatchEvent(new Event("hass-toggle-menu", { bubbles: true, composed: true }));
+  _syncHaMenuButton() {
+    const menuBtn = this.shadowRoot && this.shadowRoot.querySelector("ha-menu-button");
+    if (!menuBtn) return false;
+    menuBtn.hass = this._hass;
+    menuBtn.narrow = this._narrow;
+    return true;
   }
 
   _tryEmbeddedView() {
@@ -196,8 +198,10 @@ class ZigbeeLensPanel extends HTMLElement {
       this.shadowRoot.innerHTML = `
         <style>${ZigbeeLensPanel.styles}</style>
         <div class="embed-layout">
-          ${this._panelToolbar({ embedded: true })}
-          ${this._embeddedView(coreUrl)}
+          ${this._panelHeader({ title: "ZigbeeLens" })}
+          <div class="embed-body">
+            ${this._embeddedView(coreUrl)}
+          </div>
         </div>
       `;
       this._wire();
@@ -207,7 +211,7 @@ class ZigbeeLensPanel extends HTMLElement {
     if (this._view === "embed_blocked") {
       this.shadowRoot.innerHTML = `
         <style>${ZigbeeLensPanel.styles}</style>
-        ${this._panelToolbar()}
+        ${this._panelHeader({ title: "ZigbeeLens" })}
         <div class="wrap">
           ${this._embedBlockedView(coreUrl)}
         </div>
@@ -221,7 +225,7 @@ class ZigbeeLensPanel extends HTMLElement {
 
     this.shadowRoot.innerHTML = `
       <style>${ZigbeeLensPanel.styles}</style>
-      ${this._panelToolbar()}
+      ${this._panelHeader({ title: "ZigbeeLens" })}
       <div class="wrap">
         ${this._heroCard(s, coreUrl, connected)}
         ${this._loading ? this._loadingCard() : ""}
@@ -232,8 +236,8 @@ class ZigbeeLensPanel extends HTMLElement {
         ${!this._loading ? this._integrationCard(s, coreUrl, connected) : ""}
         <p class="note">
           The full dashboard opens here automatically when Home Assistant and Core use
-          the same protocol. Use the menu button (☰) to reopen Home Assistant navigation.
-          Open Full Dashboard opens Core in a new tab.
+          the same protocol. Use the menu button above to reopen Home Assistant navigation
+          when the sidebar is hidden.
         </p>
       </div>
     `;
@@ -431,8 +435,7 @@ class ZigbeeLensPanel extends HTMLElement {
   }
 
   _wire() {
-    const menuBtn = this.shadowRoot.getElementById("menu-btn");
-    if (menuBtn) menuBtn.addEventListener("click", () => this._toggleHaSidebar());
+    this._syncHaMenuButton();
 
     const tryEmbed = this.shadowRoot.getElementById("try-embed");
     if (tryEmbed) tryEmbed.addEventListener("click", () => this._tryEmbeddedView());
@@ -478,6 +481,27 @@ ZigbeeLensPanel.styles = `
     min-height: 0;
     height: 100%;
   }
+  .embed-body {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .panel-header {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding-left: max(0px, env(safe-area-inset-left, 0));
+    color: var(--primary-text-color, #212121);
+    font-family: var(--paper-font-body1_-_font-family, Roboto, Noto, sans-serif);
+    font-size: var(--paper-font-body1_-_font-size, 14px);
+  }
+  .panel-header-title {
+    font-weight: 500;
+    line-height: 1.25;
+    padding: 8px 0;
+  }
   .wrap {
     max-width: 880px;
     margin: 0 auto;
@@ -498,50 +522,6 @@ ZigbeeLensPanel.styles = `
   .embed-empty {
     padding: 16px;
   }
-  .panel-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
-    max-width: 880px;
-    margin: 0 auto;
-    box-sizing: border-box;
-    flex-shrink: 0;
-  }
-  .panel-toolbar.embed-toolbar {
-    max-width: none;
-    padding: 8px 12px;
-    background: var(--card-background-color, #fff);
-    border-bottom: 1px solid var(--divider-color, #e0e0e0);
-  }
-  .toolbar-link {
-    margin-left: auto;
-    color: var(--primary-color, #03a9f4);
-    font-size: 0.9rem;
-    font-weight: 600;
-    text-decoration: none;
-  }
-  .toolbar-link:hover { text-decoration: underline; }
-  .menu-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border: 1px solid var(--divider-color, #e0e0e0);
-    border-radius: 10px;
-    background: var(--card-background-color, #fff);
-    color: var(--primary-text-color, #212121);
-    cursor: pointer;
-    flex-shrink: 0;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .menu-btn svg {
-    width: 22px;
-    height: 22px;
-  }
-  .menu-btn:hover { filter: brightness(0.97); }
-  .menu-btn:active { filter: brightness(0.93); }
   .card {
     background: var(--card-background-color, #fff);
     border: 1px solid var(--divider-color, #e0e0e0);
@@ -657,20 +637,6 @@ ZigbeeLensPanel.styles = `
   .cta-row .btn.secondary {
     flex: 1 1 160px;
   }
-  .embed-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 12px;
-    flex-shrink: 0;
-  }
-  .embed-toolbar .btn.primary.embed-open {
-    margin-left: auto;
-    min-height: 44px;
-    font-size: 0.95rem;
-    flex: 1 1 auto;
-    width: auto;
-  }
   .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   .finding { margin: 0; line-height: 1.55; font-size: 1rem; word-break: break-word; }
   .grid {
@@ -733,8 +699,6 @@ ZigbeeLensPanel.styles = `
     .cta-row { flex-direction: column; }
     .cta-row .btn.primary,
     .cta-row .btn.secondary { width: 100%; flex: 1 1 auto; }
-    .embed-toolbar { flex-direction: column; }
-    .embed-toolbar .btn.primary.embed-open { margin-left: 0; width: 100%; }
   }
 `;
 

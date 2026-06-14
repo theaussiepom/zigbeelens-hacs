@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-06-15
+
+### Changed
+
+- HA panel sidebar control: use Home Assistant's built-in `ha-menu-button` in the panel header (same pattern as HACS and Scrypted) instead of a custom toggle; remove **Open in new tab** from the embedded toolbar
+
+### Fixed
+
+- HACS store icon: submit brand assets to [home-assistant/brands](https://github.com/home-assistant/brands) (`custom_integrations/zigbeelens/`) so HACS can resolve the icon from the CDN (same path as Scrypted/HACS; inline `brand/` assets only cover HA Settings)
+
 ## [0.1.11] - 2026-06-15
 
 ### Changed
