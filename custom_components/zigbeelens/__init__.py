@@ -52,7 +52,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.data.get(CONF_PANEL_ENABLED, True):
         await async_register_panel(hass, entry.entry_id, client.core_url)
     else:
-        async_update_panel_core_url(hass, client.core_url)
+        await async_unregister_panel(hass, entry.entry_id)
 
     async def _handle_coordinator_update() -> None:
         async_manage_repairs(hass, coordinator)
@@ -67,8 +67,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        if entry.data.get(CONF_PANEL_ENABLED, True):
-            await async_unregister_panel(hass, entry.entry_id)
+        await async_unregister_panel(hass, entry.entry_id)
         hass.data[DOMAIN].pop(entry.entry_id, None)
         async_clear_repairs(hass)
     return unload_ok

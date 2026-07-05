@@ -25,6 +25,15 @@ def _severity_label(value: Any) -> str:
     return "unknown"
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        if value is None:
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def build_panel_summary(
     data: ZigbeeLensCoordinatorData | None,
     *,
@@ -71,13 +80,13 @@ def build_panel_summary(
     finding = dashboard.get("current_finding") or {}
     summary["current_finding"] = finding.get("summary")
 
-    summary["active_incident_count"] = int(dashboard.get("active_incident_count") or 0)
-    summary["watching_incident_count"] = int(dashboard.get("watching_incident_count") or 0)
-    summary["network_count"] = int(
-        snapshot.get("network_count") or len(dashboard.get("networks") or [])
+    summary["active_incident_count"] = _safe_int(dashboard.get("active_incident_count"))
+    summary["watching_incident_count"] = _safe_int(dashboard.get("watching_incident_count"))
+    summary["network_count"] = _safe_int(
+        snapshot.get("network_count"), default=len(dashboard.get("networks") or [])
     )
-    summary["device_count"] = int(snapshot.get("device_count") or 0)
-    summary["unavailable_devices"] = int(snapshot.get("unavailable_count") or 0)
+    summary["device_count"] = _safe_int(snapshot.get("device_count"))
+    summary["unavailable_devices"] = _safe_int(snapshot.get("unavailable_count"))
     summary["router_risks"] = len(dashboard.get("router_risks") or [])
     summary["stale_devices"] = len(dashboard.get("stale_devices") or [])
     summary["weak_link_devices"] = len(dashboard.get("weak_links") or [])
@@ -99,8 +108,8 @@ def build_panel_summary(
                 "id": network_id,
                 "name": net.get("name") or network_id,
                 "bridge_state": str(net.get("bridge_state") or "unknown"),
-                "device_count": int(net.get("device_count") or 0),
-                "unavailable_devices": int(net.get("unavailable_count") or 0),
+                "device_count": _safe_int(net.get("device_count")),
+                "unavailable_devices": _safe_int(net.get("unavailable_count")),
                 "router_risks": per_network_router_risks,
                 "health": _severity_label(
                     net.get("incident_state") or network_health.get("severity")

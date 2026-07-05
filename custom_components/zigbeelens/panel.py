@@ -58,12 +58,21 @@ def _ws_panel_summary(hass: HomeAssistant, connection, msg: dict) -> None:
         return
 
     connected = bool(coordinator.last_update_success and coordinator.data is not None)
-    summary = build_panel_summary(
-        coordinator.data if connected else None,
-        core_url=core_url,
-        connected=connected,
-        last_exception=getattr(coordinator, "last_exception", None),
-    )
+    try:
+        summary = build_panel_summary(
+            coordinator.data if connected else None,
+            core_url=core_url,
+            connected=connected,
+            last_exception=getattr(coordinator, "last_exception", None),
+        )
+    except Exception:
+        _LOGGER.exception("Failed to build ZigbeeLens panel summary")
+        summary = build_panel_summary(
+            None,
+            core_url=core_url,
+            connected=False,
+            last_exception="Panel summary unavailable",
+        )
     connection.send_result(msg["id"], summary)
 
 
@@ -93,13 +102,21 @@ async def async_register_panel(hass: HomeAssistant, entry_id: str, core_url: str
             frontend.async_remove_panel(hass, PANEL_URL_PATH)
             state["panel_registered"] = False
         else:
-            async_update_panel_core_url(hass, core_url)
-            state["panel_registered"] = True
-            return
+            current_url = str(config.get("core_url") or "").rstrip("/")
+            new_url = core_url.rstrip("/")
+            if current_url != new_url:
+                frontend.async_remove_panel(hass, PANEL_URL_PATH)
+                state["panel_registered"] = False
+            else:
+                async_update_panel_core_url(hass, core_url)
+                state["panel_registered"] = True
+                return
 
     if state.get("panel_registered"):
-        async_update_panel_core_url(hass, core_url)
-        return
+        if PANEL_URL_PATH in panels:
+            async_update_panel_core_url(hass, core_url)
+            return
+        state["panel_registered"] = False
 
     await panel_custom.async_register_panel(
         hass,

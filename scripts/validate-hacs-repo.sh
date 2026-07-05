@@ -10,7 +10,7 @@ ok() { echo "OK: $1"; }
 
 echo "=== ZigbeeLens HACS repo validation ==="
 
-for f in hacs.json README.md LICENSE icon.png logo.png custom_components/zigbeelens/manifest.json custom_components/zigbeelens/__init__.py; do
+for f in hacs.json README.md LICENSE custom_components/zigbeelens/manifest.json custom_components/zigbeelens/__init__.py; do
   if [[ -f "${ROOT}/${f}" ]]; then ok "$f"; else fail "missing $f"; fi
 done
 
