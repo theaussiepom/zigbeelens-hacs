@@ -1,10 +1,11 @@
 /**
  * ZigbeeLens panel inside Home Assistant.
  *
- * When HA and Core share the same scheme (HTTP+HTTP or HTTPS+HTTPS), loads the
- * full Core dashboard in an iframe. Mixed content falls back to the native summary
- * plus Open Full Dashboard. Uses Home Assistant's built-in ha-menu-button in the
- * panel header (same pattern as HACS and Scrypted) to reopen the main sidebar.
+ * Native companion summary is the default. Try Embedded View optionally loads
+ * the full Core dashboard in an iframe when schemes match; mixed content and
+ * invalid URLs stay on the native/blocked fallback. Back to Summary always
+ * returns to the native panel. Uses Home Assistant's built-in ha-menu-button
+ * in the panel header (same pattern as HACS and Scrypted) to reopen the sidebar.
  */
 
 const SEVERITY = {
@@ -14,24 +15,167 @@ const SEVERITY = {
   unknown: { label: "No signal", color: "var(--secondary-text-color, #888)" },
 };
 
-/** @returns {{ canEmbed: boolean, reason?: string }} */
-function canEmbedDashboard(haProtocol, coreUrl, baseHref) {
+const STRICT_IPV4 =
+  /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
+const IPV4_NUMBER_LABEL = /^(?:[0-9]+|0[xX][0-9A-Fa-f]+)$/;
+
+function endsInIpv4Number(host) {
+  if (!host) return false;
+  const parts = host.split(".");
+  return IPV4_NUMBER_LABEL.test(parts[parts.length - 1] || "");
+}
+
+function isValidDnsAscii(host) {
+  if (!host || host.length > 253 || host.endsWith(".") || host.startsWith(".") || host.includes("*")) {
+    return false;
+  }
+  if (host.includes("..")) return false;
+  if (/[\s"'`;,\\]/.test(host) || host.includes("_")) {
+    return false;
+  }
+  if (endsInIpv4Number(host) && !STRICT_IPV4.test(host)) {
+    return false;
+  }
+  const labels = host.split(".");
+  for (const label of labels) {
+    if (!label || label.length > 63) return false;
+    if (label.startsWith("-") || label.endsWith("-")) return false;
+    if (!/^[a-z0-9-]+$/i.test(label)) return false;
+  }
+  return true;
+}
+
+function splitRawAuthority(raw) {
+  const m = /^https?:\/\/(\[[^\]]+\]|[^/?#]+)/i.exec(raw);
+  if (!m) return null;
+  const authority = m[1];
+  if (authority.startsWith("[")) {
+    const end = authority.indexOf("]");
+    if (end < 0) return null;
+    const host = authority.slice(1, end);
+    const rest = authority.slice(end + 1);
+    // Raw port must be plain decimal digits when present (leading zeros ok).
+    if (rest && !/^:\d+$/.test(rest)) return null;
+    return { host, portText: rest ? rest.slice(1) : "", bracketed: true };
+  }
+  if (authority.includes("@") || /[\s"'`;,]/.test(authority)) {
+    return null;
+  }
+  const idx = authority.lastIndexOf(":");
+  if (idx >= 0) {
+    const portText = authority.slice(idx + 1);
+    if (!/^\d+$/.test(portText)) return null;
+    return {
+      host: authority.slice(0, idx),
+      portText,
+      bracketed: false,
+    };
+  }
+  return { host: authority, portText: "", bracketed: false };
+}
+
+/**
+ * Strict canonical Core origin for iframe/anchor use.
+ * Absolute http(s) only; no relative resolution against the HA page.
+ * Matches Core/HACS CSP-safe host grammar (strict IPv4/IPv6 or IDNA DNS).
+ * @returns {string|null}
+ */
+function canonicalizeCoreOrigin(coreUrl) {
+  try {
+    if (!coreUrl || !String(coreUrl).trim()) {
+      return null;
+    }
+    const raw = String(coreUrl).trim();
+    if (raw !== String(coreUrl) || raw.toLowerCase() === "null" || raw.startsWith("//")) {
+      return null;
+    }
+    if (raw.includes("\\") || /[\u0000-\u001f\u007f]/.test(raw) || /\s/.test(raw)) {
+      return null;
+    }
+    const auth = splitRawAuthority(raw);
+    if (!auth || !auth.host) {
+      return null;
+    }
+    if (auth.host.includes("%")) {
+      return null;
+    }
+    if (auth.portText) {
+      const n = Number(auth.portText);
+      if (!Number.isInteger(n) || n < 1 || n > 65535) {
+        return null;
+      }
+    }
+    // Reject relative values: do not resolve against window.location.
+    const core = new URL(raw);
+    if (core.protocol !== "http:" && core.protocol !== "https:") {
+      return null;
+    }
+    if (core.username || core.password) {
+      return null;
+    }
+    if (core.search || core.hash) {
+      return null;
+    }
+    const path = core.pathname || "";
+    if (path && path !== "/") {
+      return null;
+    }
+
+    const browserHost = String(core.hostname || "").replace(/^\[|\]$/g, "");
+    let hostAscii;
+    if (auth.bracketed) {
+      // Bracketed authorities are IPv6-only.
+      if (!auth.host.includes(":")) return null;
+      if (!browserHost.includes(":")) return null;
+      hostAscii = browserHost;
+    } else if (STRICT_IPV4.test(browserHost)) {
+      // Reject every browser rewrite from hex/octal/short/mixed IPv4 input.
+      if (auth.host !== browserHost) return null;
+      hostAscii = browserHost;
+    } else if (endsInIpv4Number(auth.host) || endsInIpv4Number(browserHost)) {
+      return null;
+    } else {
+      hostAscii = browserHost;
+      if (hostAscii.includes(":") || !isValidDnsAscii(hostAscii)) {
+        return null;
+      }
+    }
+
+    const scheme = core.protocol === "https:" ? "https" : "http";
+    const hostFmt = hostAscii.includes(":") ? `[${hostAscii}]` : hostAscii;
+    // Use browser-canonical port (strips leading zeros / default ports).
+    const port = core.port ? `:${core.port}` : "";
+    const origin = `${scheme}://${hostFmt}${port}`;
+    if (/\s/.test(origin)) return null;
+    if (auth.bracketed) {
+      return core.origin;
+    }
+    return origin;
+  } catch {
+    return null;
+  }
+}
+
+/** @returns {{ canEmbed: boolean, reason?: string, origin?: string|null }} */
+function canEmbedDashboard(haProtocol, coreUrl) {
   try {
     const ha = String(haProtocol || "").toLowerCase();
     if (!ha.endsWith(":")) {
-      return { canEmbed: false, reason: "invalid_ha" };
+      return { canEmbed: false, reason: "invalid_ha", origin: null };
     }
-    if (!coreUrl || !String(coreUrl).trim()) {
-      return { canEmbed: false, reason: "missing_core_url" };
+    const origin = canonicalizeCoreOrigin(coreUrl);
+    if (!origin) {
+      return {
+        canEmbed: false,
+        reason: coreUrl && String(coreUrl).trim() ? "invalid_core_url" : "missing_core_url",
+        origin: null,
+      };
     }
-    const core = new URL(String(coreUrl).trim(), baseHref || window.location.href);
-    if (!core.protocol || !core.host) {
-      return { canEmbed: false, reason: "invalid_core_url" };
-    }
-    const isMixedContentIframe = ha === "https:" && core.protocol === "http:";
-    return { canEmbed: !isMixedContentIframe };
+    const coreProtocol = new URL(origin).protocol;
+    const isMixedContentIframe = ha === "https:" && coreProtocol === "http:";
+    return { canEmbed: !isMixedContentIframe, origin };
   } catch {
-    return { canEmbed: false, reason: "invalid_core_url" };
+    return { canEmbed: false, reason: "invalid_core_url", origin: null };
   }
 }
 
@@ -43,6 +187,11 @@ function esc(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function formatCount(value) {
+  if (value === null || value === undefined) return "—";
+  return String(value);
 }
 
 function relativeTime(iso) {
@@ -82,7 +231,8 @@ class ZigbeeLensPanel extends HTMLElement {
 
   set panel(panel) {
     this._configCoreUrl = (panel && panel.config && panel.config.core_url) || "";
-    if (this._maybeAutoEmbed() && this.shadowRoot) {
+    // Native summary remains the default; never auto-enter iframe mode.
+    if (this.shadowRoot && this.shadowRoot.childNodes.length) {
       this._render();
     }
   }
@@ -124,40 +274,33 @@ class ZigbeeLensPanel extends HTMLElement {
     }
     this._loading = false;
     this._loaded = true;
-    this._maybeAutoEmbed();
     this._render();
   }
 
   _coreUrl() {
-    return (this._summary && this._summary.core_url) || this._configCoreUrl || "";
+    const raw = (this._summary && this._summary.core_url) || this._configCoreUrl || "";
+    return canonicalizeCoreOrigin(raw) || "";
   }
 
-  _maybeAutoEmbed() {
-    const coreUrl = this._coreUrl();
-    const { canEmbed } = canEmbedDashboard(
-      window.location.protocol,
-      coreUrl,
-      window.location.href
-    );
-    if (!canEmbed || !coreUrl) {
-      if (this._view === "embedded") {
-        this._view = "embed_blocked";
-      }
-      return false;
-    }
-    this._view = "embedded";
-    return true;
+  _backToSummary() {
+    this._view = "summary";
+    this._render();
   }
 
   _openDashboardButton(coreUrl, extraClass = "") {
-    if (!coreUrl) return "";
-    return `<a class="btn primary ${extraClass}" href="${esc(coreUrl)}" target="_blank" rel="noopener noreferrer">
+    const safe = canonicalizeCoreOrigin(coreUrl);
+    if (!safe) return "";
+    return `<a class="btn primary ${extraClass}" href="${esc(safe)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">
       Open full ZigbeeLens dashboard
     </a>`;
   }
 
   _tryEmbedButton() {
     return `<button type="button" class="btn secondary" id="try-embed">Try Embedded View</button>`;
+  }
+
+  _backToSummaryButton() {
+    return `<button type="button" class="btn secondary" id="back-summary">Back to Summary</button>`;
   }
 
   _ctaRow(coreUrl, { includeEmbed = true } = {}) {
@@ -186,7 +329,7 @@ class ZigbeeLensPanel extends HTMLElement {
 
   _tryEmbeddedView() {
     const coreUrl = this._coreUrl();
-    const { canEmbed } = canEmbedDashboard(window.location.protocol, coreUrl, window.location.href);
+    const { canEmbed } = canEmbedDashboard(window.location.protocol, coreUrl);
     this._view = canEmbed ? "embedded" : "embed_blocked";
     this._render();
   }
@@ -199,6 +342,10 @@ class ZigbeeLensPanel extends HTMLElement {
         <style>${ZigbeeLensPanel.styles}</style>
         <div class="embed-layout">
           ${this._panelHeader({ title: "ZigbeeLens" })}
+          <div class="embed-toolbar">
+            ${this._backToSummaryButton()}
+            ${this._openDashboardButton(coreUrl)}
+          </div>
           <div class="embed-body">
             ${this._embeddedView(coreUrl)}
           </div>
@@ -222,6 +369,7 @@ class ZigbeeLensPanel extends HTMLElement {
 
     const s = this._summary || {};
     const connected = !!s.connected;
+    const decisionMode = this._decisionMode(s);
 
     this.shadowRoot.innerHTML = `
       <style>${ZigbeeLensPanel.styles}</style>
@@ -230,13 +378,19 @@ class ZigbeeLensPanel extends HTMLElement {
         ${this._heroCard(s, coreUrl, connected)}
         ${this._loading ? this._loadingCard() : ""}
         ${!this._loading && !connected ? this._disconnectedCard(s, coreUrl) : ""}
-        ${!this._loading && connected ? this._findingCard(s) : ""}
-        ${!this._loading && connected ? this._statsCard(s) : ""}
-        ${!this._loading && connected ? this._networksCard(s) : ""}
+        ${
+          !this._loading && connected && decisionMode
+            ? this._decisionPrioritiesCard(s)
+            : ""
+        }
+        ${!this._loading && connected && !decisionMode ? this._contractIncompatibleCard(s) : ""}
+        ${!this._loading && connected && decisionMode ? this._statsCard(s) : ""}
+        ${!this._loading && connected && decisionMode ? this._networksCard(s) : ""}
         ${!this._loading ? this._integrationCard(s, coreUrl, connected) : ""}
         <p class="note">
-          The full dashboard opens here automatically when Home Assistant and Core use
-          the same protocol. Use the menu button above to reopen Home Assistant navigation
+          The native summary is the default view. Use Try Embedded View when you want the
+          full Core dashboard in this panel (requires matching Core frame-ancestor
+          configuration). Use the menu button above to reopen Home Assistant navigation
           when the sidebar is hidden.
         </p>
       </div>
@@ -245,13 +399,22 @@ class ZigbeeLensPanel extends HTMLElement {
     this._wire();
   }
 
+  _decisionMode(s) {
+    return (
+      !!s &&
+      s.shared_decisions_available === true &&
+      s.core_version_compatible === true
+    );
+  }
+
   _embeddedView(coreUrl) {
-    if (!coreUrl) {
+    const safe = canonicalizeCoreOrigin(coreUrl);
+    if (!safe) {
       return `<p class="muted embed-empty">Core URL is not configured.</p>`;
     }
     return `<iframe
       class="embed-frame"
-      src="${esc(coreUrl)}"
+      src="${esc(safe)}"
       title="ZigbeeLens full dashboard"
       loading="lazy"
       referrerpolicy="no-referrer"
@@ -274,6 +437,7 @@ class ZigbeeLensPanel extends HTMLElement {
           This is optional and not required for normal use.
         </p>
         <div class="actions">
+          ${this._backToSummaryButton()}
           ${this._openDashboardButton(coreUrl)}
         </div>
       </section>
@@ -281,14 +445,32 @@ class ZigbeeLensPanel extends HTMLElement {
   }
 
   _heroCard(s, coreUrl, connected) {
-    const sev = SEVERITY[s.overall_health] || SEVERITY.unknown;
+    const decisionMode = this._decisionMode(s);
     const connBadge = connected
       ? `<span class="badge ok">Connected to Core</span>`
       : `<span class="badge off">Not connected</span>`;
-    const healthBadge =
-      connected && s.overall_health
-        ? `<span class="badge" style="--badge:${sev.color}">Health: ${esc(sev.label)}</span>`
+    let modeBadge = "";
+    if (connected && decisionMode) {
+      const contract =
+        s.decision_contract_version !== null &&
+        s.decision_contract_version !== undefined
+        ? `Decision contract v${esc(s.decision_contract_version)}`
+        : "Shared decisions";
+      const status = s.overall_decision_status
+        ? ` · ${esc(s.overall_decision_status)}`
         : "";
+      modeBadge = `<span class="badge ok">${contract}${status}</span>`;
+    } else if (connected && s.core_update_required) {
+      modeBadge = `<span class="badge watch">Core update required</span>`;
+    } else if (connected && s.integration_update_required) {
+      modeBadge = `<span class="badge watch">Integration update required</span>`;
+    } else if (connected && s.decision_payload_invalid) {
+      modeBadge = `<span class="badge watch">Decision data invalid</span>`;
+    } else if (connected && s.core_version_state === "unknown") {
+      modeBadge = `<span class="badge watch">Core version unknown</span>`;
+    } else if (connected && !decisionMode) {
+      modeBadge = `<span class="badge watch">Shared decisions unavailable</span>`;
+    }
     const mockBadge = s.mock_mode ? `<span class="badge watch">Mock data</span>` : "";
     return `
       <section class="card hero">
@@ -300,7 +482,7 @@ class ZigbeeLensPanel extends HTMLElement {
               <div class="subtitle">Home Assistant companion panel</div>
             </div>
           </div>
-          <div class="badges">${connBadge}${healthBadge}${mockBadge}</div>
+          <div class="badges">${connBadge}${modeBadge}${mockBadge}</div>
         </div>
         ${this._ctaRow(coreUrl)}
       </section>
@@ -329,20 +511,87 @@ class ZigbeeLensPanel extends HTMLElement {
     `;
   }
 
-  _findingCard(s) {
-    const finding = s.current_finding;
-    const incidents = s.active_incident_count || 0;
-    const incidentLine =
-      incidents > 0
-        ? `<span class="badge incident">${incidents} active incident${incidents === 1 ? "" : "s"}</span>`
-        : `<span class="badge ok">No active incidents</span>`;
+  _contractIncompatibleCard(s) {
+    let title = "Shared decisions unavailable";
+    let message =
+      "ZigbeeLens could not establish a compatible Decision contract. Review integration diagnostics and try again after Core is reachable.";
+
+    if (s.core_version_state === "unknown") {
+      title = "Core version unknown";
+      message =
+        "Core did not provide a valid version, so compatibility cannot be established. Shared decisions remain disabled until a valid version is observed.";
+    } else if (s.core_version_state === "incompatible") {
+      title = "Core version incompatible";
+      message =
+        "This Core version is older than the integration supports. Update Core, then reload the integration.";
+    } else if (s.capabilities_state === "unavailable") {
+      title = "Core capabilities unavailable";
+      message =
+        "The capabilities response could not be fetched. The integration will retry; no compatibility conclusion is being inferred from the outage.";
+    } else if (s.capabilities_state === "malformed") {
+      title = "Core capabilities malformed";
+      message =
+        "The capabilities response could not be validated. Shared decisions remain disabled until a valid response is observed.";
+    } else if (s.integration_update_required) {
+      title = "Integration update required";
+      message =
+        "Core exposes a newer Decision contract than this integration supports. Update the ZigbeeLens integration, then reload it.";
+    } else if (s.core_update_required) {
+      title = "Core update required";
+      message =
+        "Core does not expose the required Decision contract and capabilities. Update Core, then reload the integration.";
+    } else if (s.decision_contract_state === "malformed") {
+      title = "Decision contract malformed";
+      message =
+        "The observed Decision contract version is invalid. Compatibility cannot be established from this response.";
+    } else if (s.decision_payload_invalid) {
+      title = "Decision data malformed";
+      message =
+        "Core exposes the exact supported Decision contract, but its Dashboard decision data is missing or malformed. No upgrade remedy is inferred.";
+    }
     return `
       <section class="card">
-        <div class="card-head">
-          <h2>Current finding</h2>
-          ${incidentLine}
-        </div>
-        <p class="finding">${finding ? esc(finding) : "No active findings. ZigbeeLens is monitoring your networks."}</p>
+        <h2>${esc(title)}</h2>
+        <p class="muted">${esc(message)}</p>
+      </section>
+    `;
+  }
+
+  _decisionPrioritiesCard(s) {
+    const priorities = Array.isArray(s.investigation_priorities) ? s.investigation_priorities : [];
+    const more = Number(s.more_investigation_priority_count || 0);
+    let body;
+    if (!priorities.length) {
+      body = `<p class="muted">No current investigation priorities from stored evidence.</p>`;
+    } else {
+      const rows = priorities
+        .map((item) => {
+          const evidence = item.latest_supporting_evidence_at
+            ? `<div class="priority-time">Evidence ${esc(relativeTime(item.latest_supporting_evidence_at))}</div>`
+            : "";
+          return `
+            <div class="priority-row">
+              <div class="priority-meta">
+                <span class="badge">${esc(item.priority)}</span>
+                <span class="priority-net">${esc(item.network_name || "Network")}</span>
+              </div>
+              <div class="priority-title">${esc(item.title)}</div>
+              <div class="priority-summary">${esc(item.summary)}</div>
+              ${evidence}
+            </div>
+          `;
+        })
+        .join("");
+      const moreLine =
+        more > 0
+          ? `<p class="muted more-line">+${esc(more)} more in the full ZigbeeLens dashboard.</p>`
+          : "";
+      body = `<div class="priority-list">${rows}</div>${moreLine}`;
+    }
+    return `
+      <section class="card">
+        <h2>What needs attention now</h2>
+        ${body}
       </section>
     `;
   }
@@ -350,7 +599,7 @@ class ZigbeeLensPanel extends HTMLElement {
   _stat(label, value, accent) {
     return `
       <div class="stat">
-        <div class="stat-value" ${accent ? `style="color:${accent}"` : ""}>${esc(value)}</div>
+        <div class="stat-value" ${accent ? `style="color:${accent}"` : ""}>${esc(formatCount(value))}</div>
         <div class="stat-label">${esc(label)}</div>
       </div>
     `;
@@ -358,18 +607,22 @@ class ZigbeeLensPanel extends HTMLElement {
 
   _statsCard(s) {
     const incidentAccent =
-      (s.active_incident_count || 0) > 0 ? SEVERITY.incident.color : undefined;
+      typeof s.active_incident_count === "number" && s.active_incident_count > 0
+        ? SEVERITY.incident.color
+        : undefined;
     const unavailAccent =
-      (s.unavailable_devices || 0) > 0 ? SEVERITY.watch.color : undefined;
-    const routerAccent = (s.router_risks || 0) > 0 ? SEVERITY.watch.color : undefined;
+      typeof s.unavailable_devices === "number" && s.unavailable_devices > 0
+        ? SEVERITY.watch.color
+        : undefined;
     return `
       <section class="card">
         <div class="grid">
-          ${this._stat("Active incidents", s.active_incident_count || 0, incidentAccent)}
-          ${this._stat("Networks", s.network_count || 0)}
-          ${this._stat("Devices", s.device_count || 0)}
-          ${this._stat("Unavailable", s.unavailable_devices || 0, unavailAccent)}
-          ${this._stat("Router risks", s.router_risks || 0, routerAccent)}
+          ${this._stat("Investigation priorities", s.investigation_priority_count)}
+          ${this._stat("Data coverage warnings", s.data_coverage_warning_count)}
+          ${this._stat("Active incidents", s.active_incident_count, incidentAccent)}
+          ${this._stat("Networks", s.network_count)}
+          ${this._stat("Devices", s.device_count)}
+          ${this._stat("Unavailable", s.unavailable_devices, unavailAccent)}
         </div>
       </section>
     `;
@@ -382,22 +635,42 @@ class ZigbeeLensPanel extends HTMLElement {
     }
     const rows = networks
       .map((n) => {
-        const sev = SEVERITY[n.health] || SEVERITY.unknown;
         const online = String(n.bridge_state || "").toLowerCase() === "online";
+        const offline = String(n.bridge_state || "").toLowerCase() === "offline";
+        const bridgeColor = online
+          ? SEVERITY.ok.color
+          : offline
+            ? SEVERITY.incident.color
+            : SEVERITY.unknown.color;
+        const priorityCount =
+          typeof n.investigation_priority_count === "number"
+            ? n.investigation_priority_count
+            : null;
+        const unavailable =
+          typeof n.unavailable_devices === "number" ? n.unavailable_devices : null;
+        const meta = `
+              <span>${esc(formatCount(n.device_count))} devices</span>
+              ${
+                unavailable !== null && unavailable > 0
+                  ? `<span class="warn">${esc(unavailable)} unavailable</span>`
+                  : ""
+              }
+              ${
+                priorityCount !== null && priorityCount > 0
+                  ? `<span>${esc(priorityCount)} investigation priorit${priorityCount === 1 ? "y" : "ies"}</span>`
+                  : ""
+              }
+            `;
         return `
           <div class="net-row">
             <div class="net-main">
-              <span class="dot" style="background:${sev.color}"></span>
+              <span class="dot" style="background:${bridgeColor}"></span>
               <div>
                 <div class="net-name">${esc(n.name)}</div>
                 <div class="net-sub ${online ? "" : "warn"}">${esc(bridgeLabel(n.bridge_state))}</div>
               </div>
             </div>
-            <div class="net-meta">
-              <span>${esc(n.device_count || 0)} devices</span>
-              ${(n.unavailable_devices || 0) > 0 ? `<span class="warn">${esc(n.unavailable_devices)} unavailable</span>` : ""}
-              ${(n.router_risks || 0) > 0 ? `<span class="warn">${esc(n.router_risks)} router risk${n.router_risks === 1 ? "" : "s"}</span>` : ""}
-            </div>
+            <div class="net-meta">${meta}</div>
           </div>
         `;
       })
@@ -412,17 +685,43 @@ class ZigbeeLensPanel extends HTMLElement {
 
   _integrationCard(s, coreUrl, connected) {
     const collector = connected
-      ? s.collector_connected
+      ? s.collector_connected === true
         ? `<span class="ok-text">Connected</span>`
-        : `<span class="warn">Disconnected</span>`
+        : s.collector_connected === false
+          ? `<span class="warn">Disconnected</span>`
+          : `<span class="muted">Unknown</span>`
       : `<span class="muted">Unknown</span>`;
     const lastUpdate = connected ? relativeTime(s.last_update) : "—";
     const version = s.core_version ? ` · v${esc(s.core_version)}` : "";
+    const decisions =
+      s.shared_decisions_available === true
+        ? `<span class="ok-text">Available</span>`
+        : `<span class="muted">Unavailable</span>`;
+    const contract =
+      s.decision_contract_version !== null &&
+      s.decision_contract_version !== undefined
+        ? `v${esc(s.decision_contract_version)}`
+        : "unobserved";
+    let compatibility;
+    if (s.core_version_compatible === true) {
+      compatibility = `<span class="ok-text">Compatible</span>`;
+    } else if (s.core_version_compatible === false) {
+      compatibility = `<span class="warn">Incompatible</span>`;
+    } else {
+      compatibility = `<span class="muted">Unknown</span>`;
+    }
     return `
       <section class="card">
         <h2>Integration health</h2>
         <dl class="meta">
           <div><dt>Core URL</dt><dd><code>${esc(coreUrl || "not configured")}</code>${version}</dd></div>
+          <div><dt>Shared decisions</dt><dd>${decisions}</dd></div>
+          <div><dt>Decision contract</dt><dd>${esc(contract)}</dd></div>
+          <div><dt>Contract state</dt><dd>${esc(s.decision_contract_state || "unknown")}</dd></div>
+          <div><dt>Decision payload</dt><dd>${esc(s.decision_payload_state || "unknown")}</dd></div>
+          <div><dt>Capabilities</dt><dd>${esc(s.capabilities_state || "unknown")}</dd></div>
+          <div><dt>HA enrichment contract</dt><dd>${esc(s.enrichment_contract_state || "unknown")}</dd></div>
+          <div><dt>Core compatibility</dt><dd>${compatibility}</dd></div>
           <div><dt>Collector</dt><dd>${collector}</dd></div>
           <div><dt>Last update</dt><dd>${esc(lastUpdate)}</dd></div>
         </dl>
@@ -439,6 +738,9 @@ class ZigbeeLensPanel extends HTMLElement {
 
     const tryEmbed = this.shadowRoot.getElementById("try-embed");
     if (tryEmbed) tryEmbed.addEventListener("click", () => this._tryEmbeddedView());
+
+    const backSummary = this.shadowRoot.getElementById("back-summary");
+    if (backSummary) backSummary.addEventListener("click", () => this._backToSummary());
 
     const reload = this.shadowRoot.getElementById("reload");
     if (reload) reload.addEventListener("click", () => this._loadSummary());
@@ -480,6 +782,16 @@ ZigbeeLensPanel.styles = `
     flex: 1;
     min-height: 0;
     height: 100%;
+  }
+  .embed-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--divider-color, #ddd);
+    background: var(--card-background-color, #fff);
+    flex: 0 0 auto;
   }
   .embed-body {
     flex: 1;
@@ -654,6 +966,37 @@ ZigbeeLensPanel.styles = `
   .stat-value { font-size: 1.7rem; font-weight: 700; line-height: 1; }
   .stat-label { margin-top: 6px; font-size: 0.78rem; color: var(--secondary-text-color, #727272); line-height: 1.3; }
   .net-list { display: flex; flex-direction: column; gap: 10px; }
+  .priority-list { display: flex; flex-direction: column; gap: 12px; }
+  .priority-row {
+    padding: 12px;
+    border-radius: 10px;
+    background: var(--secondary-background-color, #f7f7f7);
+  }
+  .priority-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .priority-net {
+    font-size: 0.85rem;
+    color: var(--secondary-text-color, #727272);
+  }
+  .priority-title { font-weight: 600; word-break: break-word; }
+  .priority-summary {
+    margin-top: 4px;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    color: var(--secondary-text-color, #727272);
+    word-break: break-word;
+  }
+  .priority-time {
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: var(--secondary-text-color, #727272);
+  }
+  .more-line { margin: 10px 0 0; }
   .net-row {
     display: flex; align-items: flex-start; justify-content: space-between;
     gap: 12px; flex-wrap: wrap;
@@ -708,5 +1051,5 @@ if (!customElements.get("zigbeelens-panel")) {
 
 // Exported for lightweight testing in Node (see test_panel_embed.py asset checks).
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { canEmbedDashboard };
+  module.exports = { canEmbedDashboard, canonicalizeCoreOrigin };
 }

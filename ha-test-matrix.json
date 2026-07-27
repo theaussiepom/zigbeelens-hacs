@@ -1,0 +1,17 @@
+{
+  "reviewed_on": "2026-07-23",
+  "lanes": [
+    {
+      "name": "minimum",
+      "homeassistant": "2025.1.0",
+      "python": "3.12",
+      "requirements": "requirements-test-minimum.txt"
+    },
+    {
+      "name": "current",
+      "homeassistant": "2026.7.3",
+      "python": "3.14",
+      "requirements": "requirements-test-current.txt"
+    }
+  ]
+}

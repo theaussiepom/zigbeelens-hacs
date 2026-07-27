@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.config_entries import ConfigEntry
 
+from .compatibility import nonneg_int_not_bool, validate_decision_count_summary
 from .const import DOMAIN
 from .coordinator import ZigbeeLensDataUpdateCoordinator
 from .entity import ZigbeeLensEntity
@@ -68,7 +69,12 @@ class ZigbeeLensBinarySensor(ZigbeeLensEntity, BinarySensorEntity):
             return False
         key = self.entity_description.key
         if key == "active_incident":
-            return int(self.dashboard.get("active_incident_count") or 0) > 0
+            if "active_incident_count" not in self.dashboard:
+                return None
+            active = nonneg_int_not_bool(self.dashboard.get("active_incident_count"))
+            if active is None:
+                return None
+            return active > 0
         if key == "core_connected":
             return self.coordinator.last_update_success
         if key == "mqtt_collector_connected":
@@ -81,22 +87,36 @@ class ZigbeeLensBinarySensor(ZigbeeLensEntity, BinarySensorEntity):
             return {}
         key = self.entity_description.key
         if key == "active_incident":
-            finding = self.dashboard.get("current_finding") or {}
-            return {
-                "active_incident_count": self.dashboard.get("active_incident_count"),
-                "highest_severity": self.dashboard.get("overall_severity"),
-                "current_finding": finding.get("summary"),
-                "top_incident_summary": finding.get("summary"),
-            }
+            attrs: dict = {}
+            active = nonneg_int_not_bool(self.dashboard.get("active_incident_count"))
+            watching = nonneg_int_not_bool(self.dashboard.get("watching_incident_count"))
+            if active is not None:
+                attrs["active_incident_count"] = active
+            if watching is not None:
+                attrs["watching_incident_count"] = watching
+            # Decision attributes only when companion decisions are available.
+            if self.coordinator.data.shared_decisions_available:
+                summary = self.dashboard.get("decision_summary")
+                if validate_decision_count_summary(summary):
+                    attrs["overall_decision_status"] = summary["overall_status"]
+            return attrs
         if key == "core_connected":
+            data = self.coordinator.data
             return {
                 "core_url": self.coordinator.client.core_url,
-                "core_version": self.coordinator.data.core_version,
+                "core_version": data.core_version,
+                "core_version_state": data.core_version_state.value,
+                "capabilities_state": data.capabilities_state.value,
+                "decision_contract_version": data.decision_contract_version,
+                "decision_contract_state": data.decision_contract_state.value,
+                "decision_payload_state": data.decision_payload_state.value,
+                "enrichment_contract_state": data.enrichment_contract_state.value,
                 "last_update_success": self.coordinator.last_update_success,
-                "collector_connected": self.coordinator.data.collector_connected,
+                "collector_connected": data.collector_connected,
             }
         if key == "mqtt_collector_connected":
-            collector = self.health.get("collector") or {}
+            raw_collector = self.health.get("collector")
+            collector = raw_collector if isinstance(raw_collector, dict) else {}
             last_error = collector.get("last_error")
             return {
                 "last_message_at": collector.get("last_message_at"),

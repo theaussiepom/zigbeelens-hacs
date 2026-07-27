@@ -2,16 +2,19 @@
   "domain": "zigbeelens",
   "name": "ZigbeeLens",
   "codeowners": [
-    "@zigbeelens"
+    "@theaussiepom"
   ],
   "config_flow": true,
   "dependencies": [
     "http",
     "frontend"
   ],
-  "documentation": "https://github.com/theaussiepom/zigbeelens-hacs",
+  "documentation": "https://github.com/theaussiepom/zigbeelens/blob/906527063ad8bd594fbec51f69f6fc72205302dd/docs/hacs.md",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/theaussiepom/zigbeelens/issues",
-  "requirements": [],
-  "version": "0.1.13"
+  "requirements": [
+    "idna>=3.4"
+  ],
+  "single_config_entry": true,
+  "version": "0.1.14"
 }

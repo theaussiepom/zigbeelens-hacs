@@ -5,14 +5,54 @@ on:
     tags:
       - "v*"
 
-permissions:
-  contents: write
-
 jobs:
+  validation:
+    name: Validate exact release tree
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
   release:
+    name: Publish GitHub release
+    needs: validation
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Verify strict SemVer tag matches manifest
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          manifest = json.loads(
+              Path("custom_components/zigbeelens/manifest.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          version = manifest.get("version", "")
+          tag = os.environ["GITHUB_REF_NAME"]
+          semver = re.compile(
+              r"^(0|[1-9][0-9]*)\."
+              r"(0|[1-9][0-9]*)\."
+              r"(0|[1-9][0-9]*)"
+              r"(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+              r"(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?"
+              r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+          )
+          if not isinstance(version, str) or semver.fullmatch(version) is None:
+              raise SystemExit(f"manifest version is not strict SemVer: {version!r}")
+          if tag != f"v{version}":
+              raise SystemExit(f"tag {tag} does not match manifest version v{version}")
+          PY
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
