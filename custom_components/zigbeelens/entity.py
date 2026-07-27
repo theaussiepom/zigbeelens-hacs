@@ -55,4 +55,5 @@ class ZigbeeLensEntity(CoordinatorEntity[ZigbeeLensDataUpdateCoordinator]):
 
     @property
     def health_snapshot(self) -> dict[str, Any]:
-        return self.dashboard.get("health_snapshot") or {}
+        """Deprecated: health_snapshot is no longer a public Dashboard field."""
+        return {}

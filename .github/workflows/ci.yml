@@ -4,16 +4,78 @@ on:
   push:
     branches: [main, master]
   pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  validate:
+  structural-provenance:
+    name: Structural, provenance, Python syntax, and panel JavaScript
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
-      - name: Layout validation
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate generated HACS repository
         run: bash scripts/validate-hacs-repo.sh
+
+  home-assistant-matrix:
+    name: Home Assistant ${{ matrix.homeassistant }} / Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: minimum
+            homeassistant: "2025.1.0"
+            python: "3.12"
+          - lane: current
+            homeassistant: "2026.7.3"
+            python: "3.14"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run the exact Home Assistant compatibility lane
+        env:
+          ZIGBEELENS_HA_TEST_PYTHON: python
+        run: bash scripts/test-ha-integration-matrix.sh "${{ matrix.lane }}"
+
+  hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate with hassfest
+        uses: home-assistant/actions/hassfest@e3fb68ebda13d88a0d695082f471ba2c83d025fb
+
+  hacs:
+    name: HACS
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - name: Validate with HACS
+        uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+        with:
+          category: integration

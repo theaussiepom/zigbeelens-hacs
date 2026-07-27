@@ -6,11 +6,34 @@
         "description": "Enter the address of your ZigbeeLens Core dashboard. HTTP is fine for the native Home Assistant panel and Open Full Dashboard. Use an HTTPS address if you want the optional embedded dashboard view inside Home Assistant.",
         "data": {
           "core_url": "Core URL",
+          "api_token": "Core API token",
           "verify_ssl": "Verify SSL certificate",
           "panel_enabled": "Show ZigbeeLens companion panel in the sidebar"
         },
         "data_description": {
-          "core_url": "For example http://192.168.1.10:8377 or https://zigbeelens.example.com"
+        "core_url": "Enter the reachable Core origin, including its scheme and port when needed.",
+          "api_token": "Required when ZigbeeLens Core protects its API with bearer authentication. Leave blank for trusted-open Core."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate ZigbeeLens",
+        "description": "ZigbeeLens Core rejected the stored API token. Enter the current Core API token, or leave blank if Core now uses trusted-open access.",
+        "data": {
+          "api_token": "Core API token"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure ZigbeeLens",
+        "description": "Update the ZigbeeLens Core URL, TLS verification, or API token. Leave the token blank to keep the current credential, or enable Remove API token to clear it.",
+        "data": {
+          "core_url": "Core URL",
+          "api_token": "Core API token",
+          "remove_api_token": "Remove API token",
+          "verify_ssl": "Verify SSL certificate"
+        },
+        "data_description": {
+        "core_url": "Enter the reachable Core origin, including its scheme and port when needed.",
+          "api_token": "Enter a new token to replace the stored credential. Leave blank to keep the current token unless Remove API token is enabled."
         }
       }
     },
@@ -18,47 +41,72 @@
       "cannot_connect": "Cannot connect to ZigbeeLens Core at the configured URL.",
       "invalid_url": "Enter a valid URL including http:// or https://.",
       "invalid_response": "The endpoint did not return a valid ZigbeeLens response.",
+      "invalid_auth": "ZigbeeLens Core rejected the API token, or the token format is invalid.",
+      "token_conflict": "Enter a new token or enable Remove API token, not both.",
       "unknown": "Unexpected error."
     },
     "abort": {
-      "already_configured": "This ZigbeeLens Core URL is already configured."
+      "already_configured": "This ZigbeeLens Core URL is already configured.",
+      "single_instance_allowed": "Only one ZigbeeLens integration entry is supported.",
+      "reauth_successful": "ZigbeeLens credentials were updated.",
+      "reconfigure_successful": "ZigbeeLens connection settings were updated."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "ZigbeeLens options",
-        "description": "Change the ZigbeeLens Core URL or panel options. HTTP is fine for the native panel and Open Full Dashboard. Use an HTTPS Core URL if you want the optional embedded dashboard view inside Home Assistant.",
+        "description": "Adjust panel visibility and polling. To change the Core URL, TLS verification, or API token, use Reconfigure on the integration.",
         "data": {
-          "core_url": "Core URL",
-          "verify_ssl": "Verify SSL certificate",
           "panel_enabled": "Show ZigbeeLens companion panel in the sidebar",
           "scan_interval": "Polling interval (seconds)"
-        },
-        "data_description": {
-          "core_url": "For example http://192.168.1.10:8377 or https://zigbeelens.example.com"
         }
       }
     }
   },
   "entity": {
     "binary_sensor": {
-      "active_incident": { "name": "Active incident" },
-      "core_connected": { "name": "Core connected" },
-      "mqtt_collector_connected": { "name": "MQTT collector connected" }
+      "active_incident": {
+        "name": "Active incident"
+      },
+      "core_connected": {
+        "name": "Core connected"
+      },
+      "mqtt_collector_connected": {
+        "name": "MQTT collector connected"
+      }
     },
     "sensor": {
-      "overall_health": { "name": "Overall health" },
-      "incident_state": { "name": "Incident state" },
-      "unavailable_devices": { "name": "Unavailable devices" },
-      "recently_unstable_devices": { "name": "Recently unstable devices" },
-      "router_risks": { "name": "Router risks" },
-      "stale_devices": { "name": "Stale devices" },
-      "weak_link_devices": { "name": "Weak link devices" },
-      "low_battery_devices": { "name": "Low battery devices" },
-      "unknown_devices": { "name": "Unknown devices" },
-      "network_count": { "name": "Network count" },
-      "device_count": { "name": "Device count" }
+      "overall_decision": {
+        "name": "Overall decision"
+      },
+      "review_first_devices": {
+        "name": "Review first devices"
+      },
+      "worth_reviewing_devices": {
+        "name": "Worth reviewing devices"
+      },
+      "coverage_warning_count": {
+        "name": "Coverage warnings"
+      },
+      "watch_devices": {
+        "name": "Watch devices"
+      },
+      "incident_state": {
+        "name": "Incident state"
+      },
+      "unavailable_devices": {
+        "name": "Unavailable devices"
+      },
+      "router_risks": {
+        "name": "Router risks"
+      },
+      "network_count": {
+        "name": "Network count"
+      },
+      "device_count": {
+        "name": "Device count"
+      }
     }
   },
   "issues": {
@@ -81,6 +129,46 @@
     "mock_mode_active": {
       "title": "Mock mode active",
       "description": "ZigbeeLens Core is running in mock mode rather than live MQTT collection."
+    },
+    "incompatible_core_version": {
+      "title": "ZigbeeLens Core version is incompatible",
+      "description": "Connected ZigbeeLens Core reports version {version}, which is below the minimum this integration supports. Upgrade Core, then reload the integration."
+    },
+    "core_version_unknown": {
+      "title": "ZigbeeLens Core version is unknown",
+      "description": "ZigbeeLens Core did not return a valid version. Decision features remain unavailable until Core reports a valid compatible version."
+    },
+    "core_decision_contract_incompatible": {
+      "title": "ZigbeeLens decision contract incompatible",
+      "description": "ZigbeeLens Core reports decision contract version {version}, which this companion does not support. Upgrade ZigbeeLens Core to a release that advertises decision contract v2. This is not an authentication failure."
+    },
+    "decision_contract_older": {
+      "title": "ZigbeeLens Decision contract needs a Core update",
+      "description": "Core reports Decision contract {version}, which is missing required companion capabilities or is older than v2. Update ZigbeeLens Core."
+    },
+    "decision_contract_newer": {
+      "title": "ZigbeeLens integration needs an update",
+      "description": "Core reports newer Decision contract {version}. Update this Home Assistant integration to a version that supports it; do not downgrade or update Core for this condition."
+    },
+    "decision_contract_malformed": {
+      "title": "ZigbeeLens Decision capabilities are malformed",
+      "description": "Core returned malformed Decision capability metadata. Decision summaries are disabled; review Core diagnostics before choosing an upgrade."
+    },
+    "decision_payload_malformed": {
+      "title": "ZigbeeLens Decision data is malformed",
+      "description": "Core advertises exact Decision contract v2, but its Dashboard Decision payload is missing or malformed. Decision summaries are disabled; this condition does not prescribe a Core upgrade."
+    },
+    "home_assistant_enrichment_unsupported": {
+      "title": "Home Assistant enrichment is unavailable",
+      "description": "Core does not advertise the exact Home Assistant enrichment contract required by this integration. Registry names and areas will not be published."
+    },
+    "home_assistant_enrichment_sync_failed": {
+      "title": "Home Assistant enrichment sync failed",
+      "description": "The most recent bounded registry enrichment sync failed. Core retains the last accepted snapshot. Review the categorical integration diagnostics; transient failures are retried automatically."
+    },
+    "home_assistant_enrichment_match_incomplete": {
+      "title": "Some Home Assistant Zigbee devices could not be linked",
+      "description": "The latest complete registry snapshot contained Zigbee candidates that could not all be assigned safely to Core devices. Review the identity-free match state and counts in integration diagnostics; ZigbeeLens retries transient Core-side convergence automatically."
     }
   }
 }
